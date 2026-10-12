@@ -1,0 +1,21 @@
+services:
+  mongo:
+    image: mongo:8
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo-data:/data/db
+
+  api:
+    build: ./api
+    ports:
+      - "3000:3000"
+    environment:
+      PORT: 3000
+      MONGO_URI: mongodb://mongo:27017/strive
+      TZ: Europe/Copenhagen
+    depends_on:
+      - mongo
+
+volumes:
+  mongo-data:
