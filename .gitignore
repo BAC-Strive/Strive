@@ -1,0 +1,49 @@
+# ---------- Afhængigheder ----------
+node_modules/
+
+# ---------- Build-output ----------
+dist/
+build/
+*.tsbuildinfo
+
+# ---------- Miljøvariabler og hemmeligheder ----------
+.env
+.env.*
+!.env.example
+
+# ---------- Logs ----------
+*.log
+npm-debug.log*
+
+# ---------- Tests ----------
+coverage/
+
+# ---------- Expo / React Native ----------
+.expo/
+.expo-shared/
+web-build/
+expo-env.d.ts
+.metro-health-check*
+
+# Genererede native mapper (Expo managed workflow)
+mobile/ios/
+mobile/android/
+
+# Signeringsnøgler og certifikater
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+*.pem
+
+# ---------- Editorer ----------
+.idea/
+*.swp
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+
+# ---------- Styresystem ----------
+.DS_Store
+Thumbs.db

@@ -1,0 +1,96 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+# Et nyt push til samme branch annullerer den kørsel, der allerede er i gang
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  api:
+    name: api
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: api
+    steps:
+      - uses: actions/checkout@v4
+
+      # Trinene springes over, indtil api/ er initialiseret, så CI er grøn fra dag ét
+      - uses: actions/setup-node@v4
+        if: hashFiles('api/package-lock.json') != ''
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: api/package-lock.json
+
+      - name: Installer
+        if: hashFiles('api/package-lock.json') != ''
+        run: npm ci
+
+      - name: Lint
+        if: hashFiles('api/package-lock.json') != ''
+        run: npm run lint --if-present
+
+      - name: Typecheck
+        if: hashFiles('api/package-lock.json') != ''
+        run: npm run typecheck --if-present
+
+      - name: Test
+        if: hashFiles('api/package-lock.json') != ''
+        run: npm run test --if-present
+        env:
+          NODE_ENV: test
+          JWT_SECRET: ci-test-secret
+
+  mobile:
+    name: mobile
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        if: hashFiles('mobile/package-lock.json') != ''
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+
+      - name: Installer
+        if: hashFiles('mobile/package-lock.json') != ''
+        run: npm ci
+
+      - name: Lint
+        if: hashFiles('mobile/package-lock.json') != ''
+        run: npm run lint --if-present
+
+      - name: Typecheck
+        if: hashFiles('mobile/package-lock.json') != ''
+        run: npm run typecheck --if-present
+
+      - name: Test
+        if: hashFiles('mobile/package-lock.json') != ''
+        run: npm run test --if-present
+
+  # Ét samlet check, som branch protection kræver. Så skal reglen ikke ændres,
+  # når der kommer flere jobs til.
+  ci-ok:
+    name: ci-ok
+    if: always()
+    needs: [api, mobile]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Tjek at alle jobs bestod
+        run: |
+          if [ "${{ needs.api.result }}" != "success" ] || [ "${{ needs.mobile.result }}" != "success" ]; then
+            echo "Mindst ét job fejlede"
+            exit 1
+          fi
