@@ -9,6 +9,7 @@ async function startServer() {
 
     app.listen(env.PORT, "0.0.0.0", () => {
         console.log(`Server is running on port ${env.PORT}`);
+        console.log(`Health check endpoint: http://localhost:${env.PORT}/health`);
     });
 }
 
