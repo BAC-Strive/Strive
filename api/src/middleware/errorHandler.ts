@@ -1,6 +1,6 @@
 import { ErrorRequestHandler, RequestHandler } from "express";
 import { Error as MongooseError } from "mongoose";
-import { AppError } from "../errors/AppError";
+import { AppError } from "../errors/appError";
 
 // Ukendt rute → 404
 export const notFound: RequestHandler = (_req, res) => {
