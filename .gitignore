@@ -47,3 +47,6 @@ mobile/android/
 # ---------- Styresystem ----------
 .DS_Store
 Thumbs.db
+
+api/src/**/*.js
+api/tests/**/*.js
