@@ -22,3 +22,13 @@ const userSchema = new Schema(
 
 export type User = InferSchemaType<typeof userSchema> & { _id: Types.ObjectId };
 export const UserModel = model("User", userSchema);
+
+// Det eneste brugerobjekt, der sendes til appen. Nye felter kommer kun med, hvis de tilføjes her.
+export function toPublicUser(user: Pick<User, "_id" | "username" | "email" | "totalPoints">) {
+  return {
+    id: user._id.toString(),
+    username: user.username,
+    email: user.email,
+    totalPoints: user.totalPoints,
+  };
+}
