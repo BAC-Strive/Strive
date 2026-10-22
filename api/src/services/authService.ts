@@ -1,7 +1,7 @@
 import bcrypt from "bcryptjs";
 import { UserModel, toPublicUser } from "../models/user";
 import { signToken } from "../lib/jwt";
-import { EmailTakenError, InvalidCredentialsError } from "../errors/authErrors";
+import { EmailTakenError, InvalidCredentialsError, UnauthorizedError } from "../errors/authErrors";
 import type { LoginInput, RegisterInput } from "../validation/auth";
 
 const SALT_ROUNDS = 12;
@@ -41,6 +41,15 @@ export async function login({ email, password }: LoginInput) {
 
 	// Login lykkedes: returnér token og brugerens offentlige data (uden passwordHash).
 	return { token: signToken(user._id.toString()), user: toPublicUser(user) };
+}
+
+export async function getCurrentUser(userId: string) {
+	const user = await UserModel.findById(userId);
+	// Tokenen er gyldig, men brugeren findes ikke i databasen (måske slettet).
+	// I så fald sendes 401 Unauthorized-fejl.
+	if (!user) throw new UnauthorizedError();
+	// Hvis brugeren findes, returnér den offentlige version af brugeren (uden passwordHash).
+	return toPublicUser(user);
 }
 
 function isDuplicateEmailError(err: unknown): boolean {

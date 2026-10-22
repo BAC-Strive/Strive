@@ -1,6 +1,7 @@
 import { Router } from "express";
 import * as authService from "../services/authService";
 import { loginSchema, parseOrThrow, registerSchema } from "../validation/auth";
+import { requireAuth } from "../middleware/requireAuth";
 
 // Samler alle /auth-routes. Mountes i app.ts under "/auth".
 export const authRouter = Router();
@@ -30,6 +31,18 @@ authRouter.post("/login", async (req, res, next) => {
 		// Sender token og brugerens offentlige data (uden passwordHash) tilbage til klienten.
 		res.status(200).json(result);
 		// Hvis der opstår en fejl, sendes den videre til errorHandler, som laver svaret.
+	} catch (err) {
+		next(err);
+	}
+});
+
+// GET /auth/me: henter den indloggede bruger.
+// Bruges af appen ved opstart til at tjekke, om den gemte token stadig er gyldig.
+authRouter.get("/me", requireAuth, async (req, res, next) => {
+	try {
+		// userId er altid sat af requireAuth først, så vi kan bruge "!" for at fortælle TypeScript, at den ikke er undefined.
+		const user = await authService.getCurrentUser(req.userId!);
+		res.json({ user });
 	} catch (err) {
 		next(err);
 	}
