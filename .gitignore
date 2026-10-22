@@ -48,5 +48,3 @@ mobile/android/
 .DS_Store
 Thumbs.db
 
-api/src/**/*.js
-api/tests/**/*.js
