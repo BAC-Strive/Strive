@@ -1,0 +1,18 @@
+# Fælles formatering for hele repoet
+root = true
+
+[*]
+indent_style = tab
+indent_size = 2
+end_of_line = lf
+charset = utf-8
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+# YAML tillader ikke tabs, så her skal det være mellemrum
+[*.{yml,yaml}]
+indent_style = space
+
+# I markdown kan mellemrum i slutningen af en linje betyde linjeskift
+[*.md]
+trim_trailing_whitespace = false

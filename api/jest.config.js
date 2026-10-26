@@ -3,6 +3,7 @@ module.exports = {
   testEnvironment: "node",
   testMatch: ["**/tests/**/*.test.ts"],
   testPathIgnorePatterns: ["/node_modules/", "/dist/"],
+  setupFiles: ["<rootDir>/tests/setupEnv.ts"],
   transform: {
     "^.+\\.ts$": [
       "@swc/jest",
