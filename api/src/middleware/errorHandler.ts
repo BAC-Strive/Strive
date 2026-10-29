@@ -26,6 +26,12 @@ export const errorHandler: ErrorRequestHandler = (err, _req, res, next) => {
     return;
   }
 
+    // Ugyldigt id i URL'en (fx DELETE /habits/abc)
+  if (err instanceof MongooseError.CastError) {
+    res.status(400).json({ message: "Ugyldigt id" });
+    return;
+  }
+
   // Ugyldig JSON i request-body
   if (err?.type === "entity.parse.failed") {
     res.status(400).json({ message: "Ugyldig JSON" });
