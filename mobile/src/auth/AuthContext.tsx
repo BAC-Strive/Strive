@@ -53,7 +53,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   async function logout() {
-    await deleteToken(); // slet token fra storage, så appen ikke kan logge ind igen
+    await deleteToken(); // slet tokenen, så brugeren ikke logges automatisk ind ved næste opstart
     setUser(null);
   }
 

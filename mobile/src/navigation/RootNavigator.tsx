@@ -1,4 +1,6 @@
+import { ActivityIndicator, View } from "react-native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
+import { useAuth } from "../auth/AuthContext";
 import LoginSignupScreen from "../screens/LoginSignupScreen";
 import HabitOverviewScreen from "../screens/HabitOverviewScreen";
 import HabitFormScreen from "../screens/HabitFormScreen";
@@ -12,11 +14,30 @@ export type RootStackParamList = {
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
 export default function RootNavigator() {
+  const { user, isLoading } = useAuth();
+
+  // Mens appen tjekker en gemt token ved opstart, vises en loading-indikator.
+  // Når tjekket er færdigt, vises login eller habit-overview afhængigt af om der er en bruger.
+  if (isLoading) {
+    return (
+      <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
+        <ActivityIndicator size="large" />
+      </View>
+    );
+  }
+
+  // Hvilke skærme der findes afhænger af, om brugeren er logget ind.
+  // Når user ændrer sig, skifter navigationen automatisk.
   return (
-    <Stack.Navigator initialRouteName="LoginSignup">
-      <Stack.Screen name="LoginSignup" component={LoginSignupScreen} options={{ title: "Log ind" }} />
-      <Stack.Screen name="HabitOverview" component={HabitOverviewScreen} options={{ title: "Mine vaner" }} />
-      <Stack.Screen name="HabitForm" component={HabitFormScreen} options={{ title: "Ny vane" }} />
+    <Stack.Navigator>
+      {user ? (
+        <>
+          <Stack.Screen name="HabitOverview" component={HabitOverviewScreen} options={{ title: "Mine vaner" }} />
+          <Stack.Screen name="HabitForm" component={HabitFormScreen} options={{ title: "Ny vane" }} />
+        </>
+      ) : (
+        <Stack.Screen name="LoginSignup" component={LoginSignupScreen} options={{ headerShown: false }} />
+      )}
     </Stack.Navigator>
   );
 }
