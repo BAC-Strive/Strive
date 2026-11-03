@@ -5,6 +5,7 @@ import { COLORS } from "../theme/colors";
 import LoginSignupScreen from "../screens/LoginSignupScreen";
 import HabitOverviewScreen from "../screens/HabitOverviewScreen";
 import HabitFormScreen from "../screens/HabitFormScreen";
+import { Ionicons } from "@expo/vector-icons";
 
 export type RootStackParamList = {
   LoginSignup: undefined;
@@ -19,8 +20,8 @@ function LogoutButton() {
   const { logout } = useAuth();
 
   return (
-    <Pressable onPress={logout} hitSlop={8} accessibilityRole="button">
-      <Text style={{ color: COLORS.greenDark, fontSize: 16, fontWeight: "600" }}>Log ud</Text>
+    <Pressable onPress={logout} hitSlop={8} accessibilityRole="button" accessibilityLabel="Log ud">
+      <Ionicons name="log-out-outline" size={24} color={COLORS.greenDark} />
     </Pressable>
   );
 }
