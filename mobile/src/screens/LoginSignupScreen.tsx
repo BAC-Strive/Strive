@@ -11,6 +11,7 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "../auth/AuthContext";
 import { ApiError } from "../api/client";
 import { COLORS } from "../theme/colors";
@@ -36,6 +37,7 @@ export default function LoginSignupScreen() {
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -73,6 +75,7 @@ export default function LoginSignupScreen() {
     setMode(isRegister ? "login" : "register");
     setError(null);
     setPassword("");
+    setShowPassword(false);
   }
 
   return (
@@ -121,21 +124,33 @@ export default function LoginSignupScreen() {
 
           <View style={styles.field}>
             <Text style={styles.label}>Adgangskode</Text>
-            <TextInput
-              ref={passwordRef}
-              style={styles.input}
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry
-              autoCapitalize="none"
-              autoCorrect={false}
-              // Lader iOS foreslå en stærk adgangskode ved oprettelse og udfylde den gemte ved login
-              autoComplete={isRegister ? "new-password" : "current-password"}
-              textContentType={isRegister ? "newPassword" : "password"}
-              returnKeyType="done"
-              onSubmitEditing={handleSubmit}
-              editable={!isSubmitting}
-            />
+            <View>
+              <TextInput
+                ref={passwordRef}
+                style={[styles.input, styles.passwordInput]}
+                value={password}
+                onChangeText={setPassword}
+                secureTextEntry={!showPassword}
+                autoCapitalize="none"
+                autoCorrect={false}
+                // Lader iOS foreslå en stærk adgangskode ved oprettelse og udfylde den gemte ved login
+                autoComplete={isRegister ? "new-password" : "current-password"}
+                textContentType={isRegister ? "newPassword" : "password"}
+                returnKeyType="done"
+                onSubmitEditing={handleSubmit}
+                editable={!isSubmitting}
+              />
+              <Pressable
+                style={styles.togglePassword}
+                onPress={() => setShowPassword((shown) => !shown)}
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel={showPassword ? "Skjul adgangskode" : "Vis adgangskode"}
+              >
+                {/* Åbent øje: tryk for at vise. Overstreget øje: tryk for at skjule. */}
+                <Ionicons name={showPassword ? "eye-off-outline" : "eye-outline"} size={22} color={COLORS.muted} />
+              </Pressable>
+            </View>
             {isRegister ? <Text style={styles.hint}>Mindst 8 tegn</Text> : null}
           </View>
 
@@ -187,6 +202,14 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     fontSize: 16,
     color: COLORS.text,
+  },
+  passwordInput: { paddingRight: 48 },
+  togglePassword: {
+    position: "absolute",
+    right: 14,
+    top: 0,
+    bottom: 0,
+    justifyContent: "center",
   },
   hint: { fontSize: 13, color: COLORS.muted, marginTop: 6 },
   error: { color: COLORS.error, fontSize: 14, marginBottom: 12 },
