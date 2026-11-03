@@ -1,6 +1,7 @@
-import { ActivityIndicator, View } from "react-native";
+import { ActivityIndicator, Pressable, Text, View } from "react-native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { useAuth } from "../auth/AuthContext";
+import { COLORS } from "../theme/colors";
 import LoginSignupScreen from "../screens/LoginSignupScreen";
 import HabitOverviewScreen from "../screens/HabitOverviewScreen";
 import HabitFormScreen from "../screens/HabitFormScreen";
@@ -12,6 +13,17 @@ export type RootStackParamList = {
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
+
+// Vises i titelbjælken på "Mine vaner". Navigationen skifter selv til login, når user bliver null.
+function LogoutButton() {
+  const { logout } = useAuth();
+
+  return (
+    <Pressable onPress={logout} hitSlop={8} accessibilityRole="button">
+      <Text style={{ color: COLORS.greenDark, fontSize: 16, fontWeight: "600" }}>Log ud</Text>
+    </Pressable>
+  );
+}
 
 export default function RootNavigator() {
   const { user, isLoading } = useAuth();
@@ -32,7 +44,11 @@ export default function RootNavigator() {
     <Stack.Navigator>
       {user ? (
         <>
-          <Stack.Screen name="HabitOverview" component={HabitOverviewScreen} options={{ title: "Mine vaner" }} />
+          <Stack.Screen
+            name="HabitOverview"
+            component={HabitOverviewScreen}
+            options={{ title: "Mine vaner", headerRight: () => <LogoutButton /> }}
+          />
           <Stack.Screen name="HabitForm" component={HabitFormScreen} options={{ title: "Ny vane" }} />
         </>
       ) : (
