@@ -6,6 +6,8 @@ export const COLORS = {
   border: "#E2E0DA",
   green: "#1E9E78",
   greenDark: "#17785C",
+  greenLight: "#E8F5F0", // baggrund på et gennemført vanekort
+  greenMuted: "#CFE9DF", // deaktiveret "Gjort i dag"-knap
   error: "#C0392B",
   white: "#FFFFFF",
 };

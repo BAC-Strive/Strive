@@ -7,6 +7,13 @@ export type CompleteResult = {
   totalPoints: number; // brugerens samlede point efter gennemførslen
 };
 
+// Svar fra DELETE /habits/:id/complete
+export type UndoResult = {
+  pointsRemoved: number; // point trukket tilbage ved fortrydelsen
+  streak: number;
+  totalPoints: number; // brugerens samlede point efter fortrydelsen
+};
+
 export type Difficulty = "let" | "middel" | "svær";
 
 // Samme felter som en vane fra backend (HabitModel)

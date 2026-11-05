@@ -1,5 +1,5 @@
 import { request } from "./client";
-import type { CompleteResult, Habit, NewHabit, OverviewHabit } from "../types/habit";
+import type { CompleteResult, Habit, NewHabit, OverviewHabit, UndoResult } from "../types/habit";
 
 // Henter brugerens vaner med streak og dagens status, nyeste først
 export function getHabits(): Promise<OverviewHabit[]> {
@@ -16,9 +16,19 @@ export function deleteHabit(id: string): Promise<void> {
   return request<void>(`/habits/${encodeURIComponent(id)}`, { method: "DELETE" });
 }
 
-// Kontrakt: 201 { pointsAwarded, streak, totalPoints } | 404 "Vanen findes ikke" | 409 "Vanen er allerede gennemført i dag"
+// 201 { pointsAwarded, streak, totalPoints }
+// Fejl: 400 "Vanen skal ikke gennemføres i dag" | 404 "Vanen findes ikke" | 409 "Vanen er allerede gennemført i dag"
 export function completeHabit(habitId: string): Promise<CompleteResult> {
   return request<CompleteResult>(`/habits/${encodeURIComponent(habitId)}/complete`, {
     method: "POST",
+  });
+}
+
+// Fortryder dagens gennemførsel og trækker pointene tilbage.
+// 200 { pointsRemoved, streak, totalPoints }
+// Fejl: 404 "Vanen findes ikke" | 409 "Vanen er ikke gennemført i dag"
+export function undoCompleteHabit(habitId: string): Promise<UndoResult> {
+  return request<UndoResult>(`/habits/${encodeURIComponent(habitId)}/complete`, {
+    method: "DELETE",
   });
 }
