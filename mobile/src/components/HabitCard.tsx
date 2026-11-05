@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ActivityIndicator, Modal, Pressable, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from "react-native";
 import { ApiError } from "../api/client";
 import { COLORS } from "../theme/colors";
 
@@ -24,7 +24,6 @@ export default function HabitCard({
 }: Props) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [confirmingUndo, setConfirmingUndo] = useState(false);
 
   // Kører gennemfør eller fortryd. Viser indlæsning undervejs og en dansk fejlbesked, hvis det fejler.
   async function run(action: (id: string) => Promise<void>) {
@@ -40,6 +39,19 @@ export default function HabitCard({
     }
   }
 
+  // Spørger, om brugeren er sikker, før gennemførslen fortrydes
+  function confirmUndo() {
+    if (!onUndo) return;
+    Alert.alert(
+      "Er du sikker?",
+      `Vil du fortryde, at du har gennemført "${name}" i dag? Du mister de point, den gav.`,
+      [
+        { text: "Annuller", style: "cancel" },
+        { text: "Ja, fortryd", style: "destructive", onPress: () => run(onUndo) },
+      ],
+    );
+  }
+
   const notScheduled = !completedToday && !scheduledToday;
   const disabled = completedToday || notScheduled || loading;
 
@@ -47,7 +59,7 @@ export default function HabitCard({
     <View style={[styles.card, completedToday && styles.cardDone]}>
       <View style={styles.info}>
         <Text style={styles.name}>{name}</Text>
-        <Text style={styles.streak}>🔥 {streak} dages streak</Text>
+        <Text style={styles.streak}>🔥 {streak} {streak === 1 ? "dags" : "dages"} streak</Text>
         {error ? <Text style={styles.error}>{error}</Text> : null}
       </View>
 
@@ -81,7 +93,7 @@ export default function HabitCard({
 
         {completedToday && onUndo && (
           <Pressable
-            onPress={() => setConfirmingUndo(true)}
+            onPress={confirmUndo}
             disabled={loading}
             hitSlop={8}
             accessibilityRole="button"
@@ -92,94 +104,11 @@ export default function HabitCard({
           </Pressable>
         )}
       </View>
-
-      <Modal
-        visible={confirmingUndo}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setConfirmingUndo(false)}
-      >
-        <View style={styles.overlay}>
-          <View style={styles.dialog}>
-            <Text style={styles.dialogTitle}>Er du sikker?</Text>
-            <Text style={styles.dialogText}>
-              Vil du fortryde, at du har gennemført "{name}" i dag? Du mister de point, den gav.
-            </Text>
-            <View style={styles.dialogButtons}>
-              <Pressable
-                onPress={() => setConfirmingUndo(false)}
-                accessibilityRole="button"
-                style={[styles.dialogButton, styles.dialogCancel]}
-              >
-                <Text style={styles.dialogCancelText}>Annuller</Text>
-              </Pressable>
-              <Pressable
-                onPress={() => {
-                  setConfirmingUndo(false);
-                  if (onUndo) run(onUndo);
-                }}
-                accessibilityRole="button"
-                style={[styles.dialogButton, styles.dialogConfirm]}
-              >
-                <Text style={styles.dialogConfirmText}>Ja, fortryd</Text>
-              </Pressable>
-            </View>
-          </View>
-        </View>
-      </Modal>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: "rgba(0, 0, 0, 0.4)",
-    padding: 24,
-  },
-  dialog: {
-    width: "100%",
-    maxWidth: 360,
-    gap: 12,
-    backgroundColor: COLORS.white,
-    borderRadius: 12,
-    padding: 20,
-  },
-  dialogTitle: {
-    fontSize: 18,
-    fontWeight: "600",
-    color: COLORS.text,
-  },
-  dialogText: {
-    color: COLORS.muted,
-  },
-  dialogButtons: {
-    flexDirection: "row",
-    justifyContent: "flex-end",
-    gap: 12,
-    marginTop: 8,
-  },
-  dialogButton: {
-    borderRadius: 8,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-  },
-  dialogCancel: {
-    backgroundColor: COLORS.border,
-  },
-  dialogCancelText: {
-    color: COLORS.text,
-    fontWeight: "600",
-  },
-  dialogConfirm: {
-    backgroundColor: COLORS.error,
-  },
-  dialogConfirmText: {
-    color: COLORS.white,
-    fontWeight: "600",
-  },
   card: {
     flexDirection: "row",
     alignItems: "center",
@@ -191,7 +120,7 @@ const styles = StyleSheet.create({
     padding: 16,
   },
   cardDone: {
-    backgroundColor: "#E8F5F0",
+    backgroundColor: COLORS.greenLight,
     borderColor: COLORS.green,
   },
   info: {
@@ -228,7 +157,7 @@ const styles = StyleSheet.create({
     opacity: 0.7,
   },
   buttonDone: {
-    backgroundColor: "#CFE9DF",
+    backgroundColor: COLORS.greenMuted,
   },
   buttonOff: {
     backgroundColor: COLORS.border,
