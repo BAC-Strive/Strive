@@ -1,349 +1,228 @@
-import { Types } from "mongoose";
+import request from "supertest";
+import { Error as MongooseError, Types } from "mongoose";
+import app from "../../src/app";
 import * as habitService from "../../src/services/habitService";
-import { HabitModel } from "../../src/models/habits";
-import { HabitLogModel } from "../../src/models/habitLogs";
+import { signToken } from "../../src/lib/jwt";
 import {
   HabitNotFoundError,
   HabitAlreadyCompletedError,
   HabitNotCompletedError,
   HabitNotScheduledError,
 } from "../../src/errors/habitErrors";
-import { incrementPoints, decrementPoints } from "../../src/services/pointsService";
 
-// incrementPoints og decrementPoints mockes, så testene ikke rører brugermodellen. pointsFor er uændret.
-jest.mock("../../src/services/pointsService", () => ({
-  ...jest.requireActual("../../src/services/pointsService"),
-  incrementPoints: jest.fn(),
-  decrementPoints: jest.fn(),
-}));
-const incrementPointsMock = incrementPoints as jest.Mock;
-const decrementPointsMock = decrementPoints as jest.Mock;
-
-// Erstatter databasedelen af modellerne med mocks. Resten af filerne, fx DIFFICULTIES, er uændret.
-jest.mock("../../src/models/habits", () => ({
-  ...jest.requireActual("../../src/models/habits"),
-  HabitModel: {
-    find: jest.fn(),
-    create: jest.fn(),
-    findOne: jest.fn(),
-    deleteOne: jest.fn(),
-  },
-}));
-
-jest.mock("../../src/models/habitLogs", () => ({
-  ...jest.requireActual("../../src/models/habitLogs"),
-  HabitLogModel: {
-    deleteMany: jest.fn(),
-    deleteOne: jest.fn(),
-    create: jest.fn(),
-    find: jest.fn(),
-    findOneAndDelete: jest.fn(),
-  },
-}));
-
-// Fortæller TypeScript, at metoderne nu er mocks, så vi kan bruge fx mockResolvedValue
-const habitModel = HabitModel as unknown as Record<"find" | "create" | "findOne" | "deleteOne", jest.Mock>;
-const habitLogModel = HabitLogModel as unknown as Record<"deleteMany" | "deleteOne" | "create" | "find" | "findOneAndDelete", jest.Mock>;
+// Servicen mockes, så testene kun handler om HTTP-laget: auth, validering og statuskoder
+jest.mock("../../src/services/habitService");
+const service = habitService as jest.Mocked<typeof habitService>;
 
 const userId = new Types.ObjectId().toString();
 const habitId = new Types.ObjectId().toString();
-const input = { name: "Løb en tur", weekdays: [1, 3], difficulty: "middel" as const };
+// Rigtig token underskrevet med test-hemmeligheden fra setupEnv.ts
+const auth = { Authorization: `Bearer ${signToken(userId)}` };
+const validHabit = { name: "Løb en tur", weekdays: [1, 3], difficulty: "middel" };
 
-// find(...).sort(...).lean() er en kæde, så mocken skal returnere objekter med sort og lean
-function mockFind(result: unknown) {
-  const lean = jest.fn().mockResolvedValue(result);
-  const sort = jest.fn().mockReturnValue({ lean });
-  habitModel.find.mockReturnValue({ sort });
-  return sort;
-}
-
-// HabitLogModel.find(...).select(...).lean() er også en kæde
-function mockLogFind(result: unknown) {
-  const lean = jest.fn().mockResolvedValue(result);
-  habitLogModel.find.mockReturnValue({ select: jest.fn().mockReturnValue({ lean }) });
-}
-
-// Nulstiller alle mocks, så testene ikke påvirker hinanden
 beforeEach(() => {
   jest.resetAllMocks();
 });
 
-describe("getOverview", () => {
-  it("henter kun brugerens egne vaner, nyeste først", async () => {
-    const sort = mockFind([{ _id: habitId, userId, ...input }]);
-    mockLogFind([]);
+describe("auth på /habits", () => {
+  it("svarer 401 uden token", async () => {
+    const res = await request(app).get("/habits");
 
-    await habitService.getOverview(userId);
-
-    expect(habitModel.find).toHaveBeenCalledWith({ userId });
-    expect(sort).toHaveBeenCalledWith({ createdAt: -1 });
+    expect(res.status).toBe(401);
+    expect(service.getOverview).not.toHaveBeenCalled();
   });
 
-  it("henter logs for alle vanerne i ét kald", async () => {
-    const otherId = new Types.ObjectId().toString();
-    mockFind([{ _id: habitId, userId, ...input }, { _id: otherId, userId, ...input }]);
-    mockLogFind([]);
+  it("svarer 401 med ugyldig token", async () => {
+    const res = await request(app).get("/habits").set("Authorization", "Bearer ugyldig");
 
-    await habitService.getOverview(userId);
-
-    expect(habitLogModel.find).toHaveBeenCalledTimes(1);
-    expect(habitLogModel.find).toHaveBeenCalledWith({ habitId: { $in: [habitId, otherId] } });
-  });
-
-  it("lægger streak og completedToday på hver vane", async () => {
-    const otherId = new Types.ObjectId().toString();
-    const everyDay = [0, 1, 2, 3, 4, 5, 6];
-    mockFind([
-      { _id: habitId, userId, ...input, weekdays: everyDay },
-      { _id: otherId, userId, ...input, weekdays: everyDay },
-    ]);
-    // Kun den første vane er gennemført i dag
-    mockLogFind([{ habitId, completedAt: new Date() }]);
-
-    const result = await habitService.getOverview(userId);
-
-    expect(result[0]).toMatchObject({ _id: habitId, streak: 1, completedToday: true });
-    expect(result[1]).toMatchObject({ _id: otherId, streak: 0, completedToday: false });
+    expect(res.status).toBe(401);
   });
 });
 
-describe("createHabit", () => {
-  it("gemmer vanen på brugeren og returnerer den", async () => {
-    const saved = { _id: habitId, userId, ...input };
-    habitModel.create.mockResolvedValue({ toObject: () => saved });
+describe("GET /habits", () => {
+  it("svarer 200 med brugerens vaner", async () => {
+    const habits = [{ _id: habitId, userId, ...validHabit }];
+    service.getOverview.mockResolvedValue(habits as never);
 
-    const result = await habitService.createHabit(userId, input);
+    const res = await request(app).get("/habits").set(auth);
 
-    expect(habitModel.create).toHaveBeenCalledWith({ userId, ...input });
-    expect(result).toEqual(saved);
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual(habits);
+    // userId kommer fra tokenen, ikke fra klienten
+    expect(service.getOverview).toHaveBeenCalledWith(userId);
   });
 });
 
-describe("deleteHabit", () => {
-  it("sletter vanens logs og derefter vanen (US9)", async () => {
-    habitModel.findOne.mockResolvedValue({ _id: habitId, userId });
+describe("POST /habits", () => {
+  it("svarer 201 med den oprettede vane (US6)", async () => {
+    const saved = { _id: habitId, userId, ...validHabit };
+    service.createHabit.mockResolvedValue(saved as never);
 
-    await habitService.deleteHabit(userId, habitId);
+    const res = await request(app).post("/habits").set(auth).send(validHabit);
 
-    expect(habitLogModel.deleteMany).toHaveBeenCalledWith({ habitId });
-    expect(habitModel.deleteOne).toHaveBeenCalledWith({ _id: habitId });
+    expect(res.status).toBe(201);
+    expect(res.body).toEqual(saved);
+    expect(service.createHabit).toHaveBeenCalledWith(userId, validHabit);
   });
 
-  it("sletter logs før vanen", async () => {
-    habitModel.findOne.mockResolvedValue({ _id: habitId, userId });
+  it("sender det rensede input videre til servicen", async () => {
+    service.createHabit.mockResolvedValue({} as never);
 
-    await habitService.deleteHabit(userId, habitId);
+    await request(app)
+      .post("/habits")
+      .set(auth)
+      .send({ ...validHabit, name: "  Løb en tur  ", weekdays: [3, 1, 1] });
 
-    const logsDeletedAt = habitLogModel.deleteMany.mock.invocationCallOrder[0];
-    const habitDeletedAt = habitModel.deleteOne.mock.invocationCallOrder[0];
-    expect(logsDeletedAt).toBeLessThan(habitDeletedAt);
+    expect(service.createHabit).toHaveBeenCalledWith(userId, validHabit);
   });
 
-  // userId i filteret er det, der forhindrer, at man sletter andres vaner
-  it("leder kun efter vanen blandt brugerens egne", async () => {
-    habitModel.findOne.mockResolvedValue({ _id: habitId, userId });
+  it("svarer 400 og opretter intet ved ugyldigt input", async () => {
+    const res = await request(app).post("/habits").set(auth).send({ ...validHabit, weekdays: [] });
 
-    await habitService.deleteHabit(userId, habitId);
-
-    expect(habitModel.findOne).toHaveBeenCalledWith({ _id: habitId, userId });
+    expect(res.status).toBe(400);
+    expect(res.body).toEqual({ message: "Vælg mindst én dag" });
+    expect(service.createHabit).not.toHaveBeenCalled();
   });
 
-  it("kaster HabitNotFoundError og sletter intet, hvis vanen ikke findes eller tilhører en anden", async () => {
-    habitModel.findOne.mockResolvedValue(null);
+  it("svarer 400 ved ugyldig JSON", async () => {
+    const res = await request(app)
+      .post("/habits")
+      .set(auth)
+      .set("Content-Type", "application/json")
+      .send('{"name":');
 
-    await expect(habitService.deleteHabit(userId, habitId)).rejects.toThrow(HabitNotFoundError);
-
-    expect(habitLogModel.deleteMany).not.toHaveBeenCalled();
-    expect(habitModel.deleteOne).not.toHaveBeenCalled();
-  });
-});
-
-describe("completeHabit", () => {
-  const allDays = [0, 1, 2, 3, 4, 5, 6];
-  const habit = { _id: habitId, userId, name: "Løb en tur", weekdays: allDays, difficulty: "middel" };
-
-  // find(...).select(...).lean() er en kæde, så mocken skal returnere objekter med select og lean
-  function mockLogs(dates: Date[]) {
-    const lean = jest.fn().mockResolvedValue(dates.map((completedAt) => ({ completedAt })));
-    const select = jest.fn().mockReturnValue({ lean });
-    habitLogModel.find.mockReturnValue({ select });
-  }
-
-  function today() {
-    const now = new Date();
-    return new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  }
-
-  it("opretter en log for i dag med vanens point", async () => {
-    habitModel.findOne.mockResolvedValue(habit);
-    incrementPointsMock.mockResolvedValue(20);
-    mockLogs([today()]);
-
-    await habitService.completeHabit(userId, habitId);
-
-    expect(habitLogModel.create).toHaveBeenCalledWith({
-      habitId,
-      completedAt: today(),
-      pointsAwarded: 20,
-    });
-  });
-
-  it("lægger vanens point til brugeren og returnerer pointsAwarded, streak og totalPoints", async () => {
-    habitModel.findOne.mockResolvedValue(habit);
-    incrementPointsMock.mockResolvedValue(70);
-    mockLogs([today()]);
-
-    const result = await habitService.completeHabit(userId, habitId);
-
-    expect(incrementPointsMock).toHaveBeenCalledWith(userId, 20);
-    expect(result).toEqual({ pointsAwarded: 20, streak: 1, totalPoints: 70 });
-  });
-
-  it("leder kun efter vanen blandt brugerens egne", async () => {
-    habitModel.findOne.mockResolvedValue(habit);
-    incrementPointsMock.mockResolvedValue(20);
-    mockLogs([today()]);
-
-    await habitService.completeHabit(userId, habitId);
-
-    expect(habitModel.findOne).toHaveBeenCalledWith({ _id: habitId, userId });
-  });
-
-  it("kaster HabitNotFoundError og gør intet, hvis vanen ikke findes eller tilhører en anden", async () => {
-    habitModel.findOne.mockResolvedValue(null);
-
-    await expect(habitService.completeHabit(userId, habitId)).rejects.toThrow(HabitNotFoundError);
-
-    expect(habitLogModel.create).not.toHaveBeenCalled();
-    expect(incrementPointsMock).not.toHaveBeenCalled();
-  });
-
-  it("kaster HabitAlreadyCompletedError og giver ingen point, hvis loggen allerede findes", async () => {
-    habitModel.findOne.mockResolvedValue(habit);
-    // Det unikke indeks (habitId + completedAt) giver duplicate key-fejl 11000
-    habitLogModel.create.mockRejectedValue({ code: 11000 });
-
-    await expect(habitService.completeHabit(userId, habitId)).rejects.toThrow(HabitAlreadyCompletedError);
-
-    expect(incrementPointsMock).not.toHaveBeenCalled();
-  });
-
-  it("sender andre databasefejl videre uændret", async () => {
-    habitModel.findOne.mockResolvedValue(habit);
-    const dbError = new Error("forbindelsen røg");
-    habitLogModel.create.mockRejectedValue(dbError);
-
-    await expect(habitService.completeHabit(userId, habitId)).rejects.toBe(dbError);
-
-    expect(incrementPointsMock).not.toHaveBeenCalled();
+    expect(res.status).toBe(400);
+    expect(res.body).toEqual({ message: "Ugyldig JSON" });
   });
 });
 
-describe("completeHabit, hvis point ikke kan lægges til", () => {
-  const habit = { _id: habitId, userId, name: "Løb en tur", weekdays: [0, 1, 2, 3, 4, 5, 6], difficulty: "let" };
-  const logId = new Types.ObjectId();
+describe("DELETE /habits/:id", () => {
+  it("svarer 204 uden indhold (US9)", async () => {
+    service.deleteHabit.mockResolvedValue();
 
-  it("sletter loggen igen og sender fejlen videre, så brugeren kan prøve igen", async () => {
-    habitModel.findOne.mockResolvedValue(habit);
-    habitLogModel.create.mockResolvedValue({ _id: logId });
-    const pointsError = new Error("Brugeren findes ikke");
-    incrementPointsMock.mockRejectedValue(pointsError);
+    const res = await request(app).delete(`/habits/${habitId}`).set(auth);
 
-    await expect(habitService.completeHabit(userId, habitId)).rejects.toBe(pointsError);
+    expect(res.status).toBe(204);
+    expect(res.body).toEqual({});
+    expect(service.deleteHabit).toHaveBeenCalledWith(userId, habitId);
+  });
 
-    expect(habitLogModel.deleteOne).toHaveBeenCalledWith({ _id: logId });
-    expect(habitLogModel.find).not.toHaveBeenCalled();
+  it("svarer 404, hvis vanen ikke findes eller tilhører en anden", async () => {
+    service.deleteHabit.mockRejectedValue(new HabitNotFoundError());
+
+    const res = await request(app).delete(`/habits/${habitId}`).set(auth);
+
+    expect(res.status).toBe(404);
+    expect(res.body).toEqual({ message: "Vanen findes ikke" });
+  });
+
+  it("svarer 400 ved ugyldigt id", async () => {
+    // Det er den fejl, Mongoose kaster, når "abc" ikke kan laves om til et ObjectId
+    service.deleteHabit.mockRejectedValue(new MongooseError.CastError("ObjectId", "abc", "_id"));
+
+    const res = await request(app).delete("/habits/abc").set(auth);
+
+    expect(res.status).toBe(400);
+    expect(res.body).toEqual({ message: "Ugyldigt id" });
   });
 });
 
-describe("undoCompleteHabit", () => {
-  const allDays = [0, 1, 2, 3, 4, 5, 6];
-  const habit = { _id: habitId, userId, name: "Løb en tur", weekdays: allDays, difficulty: "middel" };
-  const logDate = new Date(2026, 9, 16);
-  const log = { _id: new Types.ObjectId(), habitId, completedAt: logDate, pointsAwarded: 20 };
+describe("POST /habits/:id/complete", () => {
+  it("svarer 201 med pointsAwarded, streak og totalPoints", async () => {
+    const result = { pointsAwarded: 20, streak: 3, totalPoints: 70 };
+    service.completeHabit.mockResolvedValue(result);
 
-  // find(...).select(...).lean() er en kæde, så mocken skal returnere objekter med select og lean
-  function mockLogs(dates: Date[]) {
-    const lean = jest.fn().mockResolvedValue(dates.map((completedAt) => ({ completedAt })));
-    const select = jest.fn().mockReturnValue({ lean });
-    habitLogModel.find.mockReturnValue({ select });
-  }
+    const res = await request(app).post(`/habits/${habitId}/complete`).set(auth);
 
-  it("sletter dagens log og trækker de point tilbage, den gav", async () => {
-    habitModel.findOne.mockResolvedValue(habit);
-    habitLogModel.findOneAndDelete.mockResolvedValue(log);
-    decrementPointsMock.mockResolvedValue(50);
-    mockLogs([]);
-
-    const result = await habitService.undoCompleteHabit(userId, habitId);
-
-    expect(habitLogModel.findOneAndDelete).toHaveBeenCalledWith({
-      habitId,
-      completedAt: new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate()),
-    });
-    expect(decrementPointsMock).toHaveBeenCalledWith(userId, 20);
-    expect(result).toEqual({ pointsRemoved: 20, streak: 0, totalPoints: 50 });
+    expect(res.status).toBe(201);
+    expect(res.body).toEqual(result);
+    // userId kommer fra tokenen, ikke fra klienten
+    expect(service.completeHabit).toHaveBeenCalledWith(userId, habitId);
   });
 
-  it("regner streaken ud igen uden dagens log", async () => {
-    habitModel.findOne.mockResolvedValue(habit);
-    habitLogModel.findOneAndDelete.mockResolvedValue(log);
-    decrementPointsMock.mockResolvedValue(30);
-    const now = new Date();
-    const yesterday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
-    mockLogs([yesterday]);
+  it("svarer 404, hvis vanen ikke findes eller tilhører en anden", async () => {
+    service.completeHabit.mockRejectedValue(new HabitNotFoundError());
 
-    const result = await habitService.undoCompleteHabit(userId, habitId);
+    const res = await request(app).post(`/habits/${habitId}/complete`).set(auth);
 
-    expect(result.streak).toBe(1);
+    expect(res.status).toBe(404);
+    expect(res.body).toEqual({ message: "Vanen findes ikke" });
   });
 
-  it("leder kun efter vanen blandt brugerens egne", async () => {
-    habitModel.findOne.mockResolvedValue(null);
+  it("svarer 409, hvis vanen allerede er gennemført i dag", async () => {
+    service.completeHabit.mockRejectedValue(new HabitAlreadyCompletedError());
 
-    await expect(habitService.undoCompleteHabit(userId, habitId)).rejects.toThrow(HabitNotFoundError);
+    const res = await request(app).post(`/habits/${habitId}/complete`).set(auth);
 
-    expect(habitModel.findOne).toHaveBeenCalledWith({ _id: habitId, userId });
-    expect(habitLogModel.findOneAndDelete).not.toHaveBeenCalled();
-    expect(decrementPointsMock).not.toHaveBeenCalled();
+    expect(res.status).toBe(409);
+    expect(res.body).toEqual({ message: "Vanen er allerede gennemført i dag" });
   });
 
-  it("kaster HabitNotCompletedError og trækker ingen point, hvis vanen ikke er gennemført i dag", async () => {
-    habitModel.findOne.mockResolvedValue(habit);
-    habitLogModel.findOneAndDelete.mockResolvedValue(null);
+  it("svarer 401 uden token", async () => {
+    const res = await request(app).post(`/habits/${habitId}/complete`);
 
-    await expect(habitService.undoCompleteHabit(userId, habitId)).rejects.toThrow(HabitNotCompletedError);
-
-    expect(decrementPointsMock).not.toHaveBeenCalled();
-  });
-
-  it("lægger loggen tilbage og sender fejlen videre, hvis point ikke kan trækkes fra", async () => {
-    habitModel.findOne.mockResolvedValue(habit);
-    habitLogModel.findOneAndDelete.mockResolvedValue(log);
-    const pointsError = new Error("Brugeren findes ikke");
-    decrementPointsMock.mockRejectedValue(pointsError);
-
-    await expect(habitService.undoCompleteHabit(userId, habitId)).rejects.toBe(pointsError);
-
-    expect(habitLogModel.create).toHaveBeenCalledWith({
-      habitId,
-      completedAt: logDate,
-      pointsAwarded: 20,
-    });
+    expect(res.status).toBe(401);
+    expect(service.completeHabit).not.toHaveBeenCalled();
   });
 });
 
-describe("completeHabit, hvis vanen ikke er planlagt i dag", () => {
-  // Alle ugedage undtagen i dag
-  const notToday = [0, 1, 2, 3, 4, 5, 6].filter((day) => day !== new Date().getDay());
-  const habit = { _id: habitId, userId, name: "Løb en tur", weekdays: notToday, difficulty: "let" };
+describe("POST /habits/:id/complete, ugyldigt id", () => {
+  it("svarer 400 ved ugyldigt id", async () => {
+    // Det er den fejl, Mongoose kaster, når "abc" ikke kan laves om til et ObjectId
+    service.completeHabit.mockRejectedValue(new MongooseError.CastError("ObjectId", "abc", "_id"));
 
-  it("kaster HabitNotScheduledError og opretter ingen log og giver ingen point", async () => {
-    habitModel.findOne.mockResolvedValue(habit);
+    const res = await request(app).post("/habits/abc/complete").set(auth);
 
-    await expect(habitService.completeHabit(userId, habitId)).rejects.toThrow(HabitNotScheduledError);
+    expect(res.status).toBe(400);
+    expect(res.body).toEqual({ message: "Ugyldigt id" });
+  });
+});
 
-    expect(habitLogModel.create).not.toHaveBeenCalled();
-    expect(incrementPointsMock).not.toHaveBeenCalled();
+describe("DELETE /habits/:id/complete", () => {
+  it("svarer 200 med pointsRemoved, streak og totalPoints (US8)", async () => {
+    const result = { pointsRemoved: 20, streak: 2, totalPoints: 50 };
+    service.undoCompleteHabit.mockResolvedValue(result);
+
+    const res = await request(app).delete(`/habits/${habitId}/complete`).set(auth);
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual(result);
+    expect(service.undoCompleteHabit).toHaveBeenCalledWith(userId, habitId);
+  });
+
+  it("svarer 404, hvis vanen ikke findes eller tilhører en anden", async () => {
+    service.undoCompleteHabit.mockRejectedValue(new HabitNotFoundError());
+
+    const res = await request(app).delete(`/habits/${habitId}/complete`).set(auth);
+
+    expect(res.status).toBe(404);
+    expect(res.body).toEqual({ message: "Vanen findes ikke" });
+  });
+
+  it("svarer 409, hvis vanen ikke er gennemført i dag", async () => {
+    service.undoCompleteHabit.mockRejectedValue(new HabitNotCompletedError());
+
+    const res = await request(app).delete(`/habits/${habitId}/complete`).set(auth);
+
+    expect(res.status).toBe(409);
+    expect(res.body).toEqual({ message: "Vanen er ikke gennemført i dag" });
+  });
+
+  it("svarer 401 uden token", async () => {
+    const res = await request(app).delete(`/habits/${habitId}/complete`);
+
+    expect(res.status).toBe(401);
+    expect(service.undoCompleteHabit).not.toHaveBeenCalled();
+  });
+});
+
+describe("POST /habits/:id/complete, ikke planlagt i dag", () => {
+  it("svarer 400, hvis vanen ikke skal gennemføres i dag", async () => {
+    service.completeHabit.mockRejectedValue(new HabitNotScheduledError());
+
+    const res = await request(app).post(`/habits/${habitId}/complete`).set(auth);
+
+    expect(res.status).toBe(400);
+    expect(res.body).toEqual({ message: "Vanen skal ikke gennemføres i dag" });
   });
 });

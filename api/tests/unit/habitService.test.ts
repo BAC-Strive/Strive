@@ -57,6 +57,12 @@ function mockFind(result: unknown) {
   return sort;
 }
 
+// HabitLogModel.find(...).select(...).lean() er også en kæde
+function mockLogFind(result: unknown) {
+  const lean = jest.fn().mockResolvedValue(result);
+  habitLogModel.find.mockReturnValue({ select: jest.fn().mockReturnValue({ lean }) });
+}
+
 // Nulstiller alle mocks, så testene ikke påvirker hinanden
 beforeEach(() => {
   jest.resetAllMocks();
@@ -64,14 +70,40 @@ beforeEach(() => {
 
 describe("getOverview", () => {
   it("henter kun brugerens egne vaner, nyeste først", async () => {
-    const habits = [{ _id: habitId, userId, ...input }];
-    const sort = mockFind(habits);
+    const sort = mockFind([{ _id: habitId, userId, ...input }]);
+    mockLogFind([]);
+
+    await habitService.getOverview(userId);
+
+    expect(habitModel.find).toHaveBeenCalledWith({ userId });
+    expect(sort).toHaveBeenCalledWith({ createdAt: -1 });
+  });
+
+  it("henter logs for alle vanerne i ét kald", async () => {
+    const otherId = new Types.ObjectId().toString();
+    mockFind([{ _id: habitId, userId, ...input }, { _id: otherId, userId, ...input }]);
+    mockLogFind([]);
+
+    await habitService.getOverview(userId);
+
+    expect(habitLogModel.find).toHaveBeenCalledTimes(1);
+    expect(habitLogModel.find).toHaveBeenCalledWith({ habitId: { $in: [habitId, otherId] } });
+  });
+
+  it("lægger streak og completedToday på hver vane", async () => {
+    const otherId = new Types.ObjectId().toString();
+    const everyDay = [0, 1, 2, 3, 4, 5, 6];
+    mockFind([
+      { _id: habitId, userId, ...input, weekdays: everyDay },
+      { _id: otherId, userId, ...input, weekdays: everyDay },
+    ]);
+    // Kun den første vane er gennemført i dag
+    mockLogFind([{ habitId, completedAt: new Date() }]);
 
     const result = await habitService.getOverview(userId);
 
-    expect(result).toEqual(habits);
-    expect(habitModel.find).toHaveBeenCalledWith({ userId });
-    expect(sort).toHaveBeenCalledWith({ createdAt: -1 });
+    expect(result[0]).toMatchObject({ _id: habitId, streak: 1, completedToday: true });
+    expect(result[1]).toMatchObject({ _id: otherId, streak: 0, completedToday: false });
   });
 });
 
