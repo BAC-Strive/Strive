@@ -11,6 +11,7 @@ type AuthContextValue = {
   login: (email: string, password: string) => Promise<void>;
   register: (username: string, email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
+  updateTotalPoints: (totalPoints: number) => void; // opdaterer brugerens point efter gennemfør/fortryd
 };
 
 // Delt auth-state for hele appen; null betyder at der ikke er nogen AuthProvider
@@ -57,9 +58,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
   }
 
+  // Kaldes med totalPoints fra svaret på gennemfør/fortryd, så user.totalPoints er den ene kilde til
+  // pointene. Den funktionelle opdatering sikrer, at to hurtige svar ikke overskriver andre ændringer.
+  function updateTotalPoints(totalPoints: number) {
+    setUser((current) => (current ? { ...current, totalPoints } : current));
+  }
+
   // AuthContext.Provider gør auth-state tilgængelig for alle skærme, som bruger useAuth()
   return (
-    <AuthContext.Provider value={{ user, isLoading, login, register, logout }}>
+    <AuthContext.Provider value={{ user, isLoading, login, register, logout, updateTotalPoints }}>
       {children}
     </AuthContext.Provider>
   );
