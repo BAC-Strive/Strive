@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Modal, Pressable, StyleSheet, Text, View } from "react-native";
+import { ApiError } from "../api/client";
 import { COLORS } from "../theme/colors";
 
 type Props = {
@@ -7,13 +8,23 @@ type Props = {
   name: string;
   streak: number;
   completedToday: boolean;
+  scheduledToday?: boolean; // Er vanen planlagt til i dag? Hvis ikke, vises "Ikke i dag" (backenden afviser med 400)
   onComplete: (id: string) => Promise<void>;
   onUndo?: (id: string) => Promise<void>; // Vises som "Fortryd", når vanen er gennemført i dag
 };
 
-export default function HabitCard({ id, name, streak, completedToday, onComplete, onUndo }: Props) {
+export default function HabitCard({
+  id,
+  name,
+  streak,
+  completedToday,
+  scheduledToday = true,
+  onComplete,
+  onUndo,
+}: Props) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [confirmingUndo, setConfirmingUndo] = useState(false);
 
   // Kører gennemfør eller fortryd. Viser indlæsning undervejs og en dansk fejlbesked, hvis det fejler.
   async function run(action: (id: string) => Promise<void>) {
@@ -22,20 +33,22 @@ export default function HabitCard({ id, name, streak, completedToday, onComplete
     try {
       await action(id);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Noget gik galt. Prøv igen.");
+      // Kun fejl fra API-kaldet vises, så tekniske JS-fejl ikke når brugeren
+      setError(err instanceof ApiError ? err.message : "Noget gik galt. Prøv igen.");
     } finally {
       setLoading(false);
     }
   }
 
-  const disabled = completedToday || loading;
+  const notScheduled = !completedToday && !scheduledToday;
+  const disabled = completedToday || notScheduled || loading;
 
   return (
     <View style={[styles.card, completedToday && styles.cardDone]}>
       <View style={styles.info}>
         <Text style={styles.name}>{name}</Text>
         <Text style={styles.streak}>🔥 {streak} dages streak</Text>
-        {error && <Text style={styles.error}>{error}</Text>}
+        {error ? <Text style={styles.error}>{error}</Text> : null}
       </View>
 
       <View style={styles.actions}>
@@ -44,20 +57,31 @@ export default function HabitCard({ id, name, streak, completedToday, onComplete
           disabled={disabled}
           accessibilityRole="button"
           accessibilityState={{ disabled }}
-          style={[styles.button, completedToday && styles.buttonDone, loading && styles.buttonLoading]}
+          style={[
+            styles.button,
+            completedToday && styles.buttonDone,
+            notScheduled && styles.buttonOff,
+            loading && styles.buttonLoading,
+          ]}
         >
           {loading ? (
             <ActivityIndicator color={completedToday ? COLORS.greenDark : COLORS.white} />
           ) : (
-            <Text style={[styles.buttonText, completedToday && styles.buttonTextDone]}>
-              {completedToday ? "✓ Gjort i dag" : "Gennemfør"}
+            <Text
+              style={[
+                styles.buttonText,
+                completedToday && styles.buttonTextDone,
+                notScheduled && styles.buttonTextOff,
+              ]}
+            >
+              {completedToday ? "✓ Gjort i dag" : notScheduled ? "Ikke i dag" : "Gennemfør"}
             </Text>
           )}
         </Pressable>
 
         {completedToday && onUndo && (
           <Pressable
-            onPress={() => run(onUndo)}
+            onPress={() => setConfirmingUndo(true)}
             disabled={loading}
             hitSlop={8}
             accessibilityRole="button"
@@ -68,11 +92,94 @@ export default function HabitCard({ id, name, streak, completedToday, onComplete
           </Pressable>
         )}
       </View>
+
+      <Modal
+        visible={confirmingUndo}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setConfirmingUndo(false)}
+      >
+        <View style={styles.overlay}>
+          <View style={styles.dialog}>
+            <Text style={styles.dialogTitle}>Er du sikker?</Text>
+            <Text style={styles.dialogText}>
+              Vil du fortryde, at du har gennemført "{name}" i dag? Du mister de point, den gav.
+            </Text>
+            <View style={styles.dialogButtons}>
+              <Pressable
+                onPress={() => setConfirmingUndo(false)}
+                accessibilityRole="button"
+                style={[styles.dialogButton, styles.dialogCancel]}
+              >
+                <Text style={styles.dialogCancelText}>Annuller</Text>
+              </Pressable>
+              <Pressable
+                onPress={() => {
+                  setConfirmingUndo(false);
+                  if (onUndo) run(onUndo);
+                }}
+                accessibilityRole="button"
+                style={[styles.dialogButton, styles.dialogConfirm]}
+              >
+                <Text style={styles.dialogConfirmText}>Ja, fortryd</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
+  overlay: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "rgba(0, 0, 0, 0.4)",
+    padding: 24,
+  },
+  dialog: {
+    width: "100%",
+    maxWidth: 360,
+    gap: 12,
+    backgroundColor: COLORS.white,
+    borderRadius: 12,
+    padding: 20,
+  },
+  dialogTitle: {
+    fontSize: 18,
+    fontWeight: "600",
+    color: COLORS.text,
+  },
+  dialogText: {
+    color: COLORS.muted,
+  },
+  dialogButtons: {
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    gap: 12,
+    marginTop: 8,
+  },
+  dialogButton: {
+    borderRadius: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  dialogCancel: {
+    backgroundColor: COLORS.border,
+  },
+  dialogCancelText: {
+    color: COLORS.text,
+    fontWeight: "600",
+  },
+  dialogConfirm: {
+    backgroundColor: COLORS.error,
+  },
+  dialogConfirmText: {
+    color: COLORS.white,
+    fontWeight: "600",
+  },
   card: {
     flexDirection: "row",
     alignItems: "center",
@@ -123,11 +230,17 @@ const styles = StyleSheet.create({
   buttonDone: {
     backgroundColor: "#CFE9DF",
   },
+  buttonOff: {
+    backgroundColor: COLORS.border,
+  },
   buttonText: {
     color: COLORS.white,
     fontWeight: "600",
   },
   buttonTextDone: {
     color: COLORS.greenDark,
+  },
+  buttonTextOff: {
+    color: COLORS.muted,
   },
 });
