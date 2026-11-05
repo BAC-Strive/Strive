@@ -8,17 +8,19 @@ type Props = {
   streak: number;
   completedToday: boolean;
   onComplete: (id: string) => Promise<void>;
+  onUndo?: (id: string) => Promise<void>; // Vises som "Fortryd", når vanen er gennemført i dag
 };
 
-export default function HabitCard({ id, name, streak, completedToday, onComplete }: Props) {
+export default function HabitCard({ id, name, streak, completedToday, onComplete, onUndo }: Props) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  async function handlePress() {
+  // Kører gennemfør eller fortryd. Viser indlæsning undervejs og en dansk fejlbesked, hvis det fejler.
+  async function run(action: (id: string) => Promise<void>) {
     setLoading(true);
     setError(null);
     try {
-      await onComplete(id);
+      await action(id);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Noget gik galt. Prøv igen.");
     } finally {
@@ -36,21 +38,36 @@ export default function HabitCard({ id, name, streak, completedToday, onComplete
         {error && <Text style={styles.error}>{error}</Text>}
       </View>
 
-      <Pressable
-        onPress={handlePress}
-        disabled={disabled}
-        accessibilityRole="button"
-        accessibilityState={{ disabled }}
-        style={[styles.button, completedToday && styles.buttonDone, loading && styles.buttonLoading]}
-      >
-        {loading ? (
-          <ActivityIndicator color={COLORS.white} />
-        ) : (
-          <Text style={[styles.buttonText, completedToday && styles.buttonTextDone]}>
-            {completedToday ? "✓ Gjort i dag" : "Gennemfør"}
-          </Text>
+      <View style={styles.actions}>
+        <Pressable
+          onPress={() => run(onComplete)}
+          disabled={disabled}
+          accessibilityRole="button"
+          accessibilityState={{ disabled }}
+          style={[styles.button, completedToday && styles.buttonDone, loading && styles.buttonLoading]}
+        >
+          {loading ? (
+            <ActivityIndicator color={completedToday ? COLORS.greenDark : COLORS.white} />
+          ) : (
+            <Text style={[styles.buttonText, completedToday && styles.buttonTextDone]}>
+              {completedToday ? "✓ Gjort i dag" : "Gennemfør"}
+            </Text>
+          )}
+        </Pressable>
+
+        {completedToday && onUndo && (
+          <Pressable
+            onPress={() => run(onUndo)}
+            disabled={loading}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel="Fortryd gennemførsel"
+            accessibilityState={{ disabled: loading }}
+          >
+            <Text style={[styles.undoText, loading && styles.buttonLoading]}>Fortryd</Text>
+          </Pressable>
         )}
-      </Pressable>
+      </View>
     </View>
   );
 }
@@ -83,6 +100,14 @@ const styles = StyleSheet.create({
   },
   error: {
     color: COLORS.error,
+  },
+  actions: {
+    alignItems: "center",
+    gap: 8,
+  },
+  undoText: {
+    color: COLORS.greenDark,
+    textDecorationLine: "underline",
   },
   button: {
     minWidth: 120,
