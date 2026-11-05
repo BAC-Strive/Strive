@@ -3,7 +3,12 @@ import { Error as MongooseError, Types } from "mongoose";
 import app from "../../src/app";
 import * as habitService from "../../src/services/habitService";
 import { signToken } from "../../src/lib/jwt";
-import { HabitNotFoundError } from "../../src/errors/habitErrors";
+import {
+  HabitNotFoundError,
+  HabitAlreadyCompletedError,
+  HabitNotCompletedError,
+  HabitNotScheduledError,
+} from "../../src/errors/habitErrors";
 
 // Servicen mockes, så testene kun handler om HTTP-laget: auth, validering og statuskoder
 jest.mock("../../src/services/habitService");
@@ -119,5 +124,105 @@ describe("DELETE /habits/:id", () => {
 
     expect(res.status).toBe(400);
     expect(res.body).toEqual({ message: "Ugyldigt id" });
+  });
+});
+
+describe("POST /habits/:id/complete", () => {
+  it("svarer 201 med pointsAwarded, streak og totalPoints", async () => {
+    const result = { pointsAwarded: 20, streak: 3, totalPoints: 70 };
+    service.completeHabit.mockResolvedValue(result);
+
+    const res = await request(app).post(`/habits/${habitId}/complete`).set(auth);
+
+    expect(res.status).toBe(201);
+    expect(res.body).toEqual(result);
+    // userId kommer fra tokenen, ikke fra klienten
+    expect(service.completeHabit).toHaveBeenCalledWith(userId, habitId);
+  });
+
+  it("svarer 404, hvis vanen ikke findes eller tilhører en anden", async () => {
+    service.completeHabit.mockRejectedValue(new HabitNotFoundError());
+
+    const res = await request(app).post(`/habits/${habitId}/complete`).set(auth);
+
+    expect(res.status).toBe(404);
+    expect(res.body).toEqual({ message: "Vanen findes ikke" });
+  });
+
+  it("svarer 409, hvis vanen allerede er gennemført i dag", async () => {
+    service.completeHabit.mockRejectedValue(new HabitAlreadyCompletedError());
+
+    const res = await request(app).post(`/habits/${habitId}/complete`).set(auth);
+
+    expect(res.status).toBe(409);
+    expect(res.body).toEqual({ message: "Vanen er allerede gennemført i dag" });
+  });
+
+  it("svarer 401 uden token", async () => {
+    const res = await request(app).post(`/habits/${habitId}/complete`);
+
+    expect(res.status).toBe(401);
+    expect(service.completeHabit).not.toHaveBeenCalled();
+  });
+});
+
+describe("POST /habits/:id/complete, ugyldigt id", () => {
+  it("svarer 400 ved ugyldigt id", async () => {
+    // Det er den fejl, Mongoose kaster, når "abc" ikke kan laves om til et ObjectId
+    service.completeHabit.mockRejectedValue(new MongooseError.CastError("ObjectId", "abc", "_id"));
+
+    const res = await request(app).post("/habits/abc/complete").set(auth);
+
+    expect(res.status).toBe(400);
+    expect(res.body).toEqual({ message: "Ugyldigt id" });
+  });
+});
+
+describe("DELETE /habits/:id/complete", () => {
+  it("svarer 200 med pointsRemoved, streak og totalPoints (US8)", async () => {
+    const result = { pointsRemoved: 20, streak: 2, totalPoints: 50 };
+    service.undoCompleteHabit.mockResolvedValue(result);
+
+    const res = await request(app).delete(`/habits/${habitId}/complete`).set(auth);
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual(result);
+    expect(service.undoCompleteHabit).toHaveBeenCalledWith(userId, habitId);
+  });
+
+  it("svarer 404, hvis vanen ikke findes eller tilhører en anden", async () => {
+    service.undoCompleteHabit.mockRejectedValue(new HabitNotFoundError());
+
+    const res = await request(app).delete(`/habits/${habitId}/complete`).set(auth);
+
+    expect(res.status).toBe(404);
+    expect(res.body).toEqual({ message: "Vanen findes ikke" });
+  });
+
+  it("svarer 409, hvis vanen ikke er gennemført i dag", async () => {
+    service.undoCompleteHabit.mockRejectedValue(new HabitNotCompletedError());
+
+    const res = await request(app).delete(`/habits/${habitId}/complete`).set(auth);
+
+    expect(res.status).toBe(409);
+    expect(res.body).toEqual({ message: "Vanen er ikke gennemført i dag" });
+  });
+
+  it("svarer 401 uden token", async () => {
+    const res = await request(app).delete(`/habits/${habitId}/complete`);
+
+    expect(res.status).toBe(401);
+    expect(service.undoCompleteHabit).not.toHaveBeenCalled();
+  });
+});
+
+describe("POST /habits/:id/complete, ikke planlagt i dag", () => {
+  it("svarer 400, hvis vanen ikke skal gennemføres i dag", async () => {
+    service.completeHabit.mockRejectedValue(new HabitNotScheduledError());
+
+    const res = await request(app).post(`/habits/${habitId}/complete`).set(auth);
+
+    expect(res.status).toBe(400);
+    expect(res.body).toEqual({ message: "Vanen skal ikke gennemføres i dag" });
   });
 });

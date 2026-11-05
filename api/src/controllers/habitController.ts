@@ -31,3 +31,18 @@ habitRouter.delete("/:id", async (req, res) => {
   await habitService.deleteHabit(req.userId!, req.params.id);
   res.status(204).end();
 });
+
+// POST /habits/:id/complete: gennemfører en vane for i dag
+habitRouter.post("/:id/complete", async (req, res) => {
+  // Kaster HabitNotFoundError (404), HabitAlreadyCompletedError (409) eller HabitNotScheduledError (400).
+  // Ugyldigt id giver også 400 (CastError).
+  const result = await habitService.completeHabit(req.userId!, req.params.id);
+  res.status(201).json(result);
+});
+
+// DELETE /habits/:id/complete: fortryder dagens gennemførsel og trækker pointene tilbage (US8)
+habitRouter.delete("/:id/complete", async (req, res) => {
+  // Kaster HabitNotFoundError (404) eller HabitNotCompletedError (409). Ugyldigt id giver 400 (CastError).
+  const result = await habitService.undoCompleteHabit(req.userId!, req.params.id);
+  res.status(200).json(result);
+});
