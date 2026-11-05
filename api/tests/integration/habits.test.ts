@@ -3,7 +3,7 @@ import { Error as MongooseError, Types } from "mongoose";
 import app from "../../src/app";
 import * as habitService from "../../src/services/habitService";
 import { signToken } from "../../src/lib/jwt";
-import { HabitNotFoundError } from "../../src/errors/habitErrors";
+import { HabitNotFoundError, HabitAlreadyCompletedError } from "../../src/errors/habitErrors";
 
 // Servicen mockes, så testene kun handler om HTTP-laget: auth, validering og statuskoder
 jest.mock("../../src/services/habitService");
@@ -119,5 +119,45 @@ describe("DELETE /habits/:id", () => {
 
     expect(res.status).toBe(400);
     expect(res.body).toEqual({ message: "Ugyldigt id" });
+  });
+});
+
+
+describe("POST /habits/:id/complete", () => {
+  it("svarer 201 med points, streak og totalPoints", async () => {
+    const result = { points: 20, streak: 3, totalPoints: 70 };
+    service.completeHabit.mockResolvedValue(result);
+
+    const res = await request(app).post(`/habits/${habitId}/complete`).set(auth);
+
+    expect(res.status).toBe(201);
+    expect(res.body).toEqual(result);
+    // userId kommer fra tokenen, ikke fra klienten
+    expect(service.completeHabit).toHaveBeenCalledWith(userId, habitId);
+  });
+
+  it("svarer 404, hvis vanen ikke findes eller tilhører en anden", async () => {
+    service.completeHabit.mockRejectedValue(new HabitNotFoundError());
+
+    const res = await request(app).post(`/habits/${habitId}/complete`).set(auth);
+
+    expect(res.status).toBe(404);
+    expect(res.body).toEqual({ message: "Vanen findes ikke" });
+  });
+
+  it("svarer 409, hvis vanen allerede er gennemført i dag", async () => {
+    service.completeHabit.mockRejectedValue(new HabitAlreadyCompletedError());
+
+    const res = await request(app).post(`/habits/${habitId}/complete`).set(auth);
+
+    expect(res.status).toBe(409);
+    expect(res.body).toEqual({ message: "Vanen er allerede gennemført i dag" });
+  });
+
+  it("svarer 401 uden token", async () => {
+    const res = await request(app).post(`/habits/${habitId}/complete`);
+
+    expect(res.status).toBe(401);
+    expect(service.completeHabit).not.toHaveBeenCalled();
   });
 });

@@ -20,21 +20,32 @@ describe("incrementPoints", () => {
     jest.restoreAllMocks();
   });
 
+  // findOneAndUpdate(...).lean() er en kæde, så mocken returnerer et objekt med lean
+  function mockUpdate(result: unknown) {
+    const lean = jest.fn().mockResolvedValue(result);
+    return jest.spyOn(UserModel, "findOneAndUpdate").mockReturnValue({ lean } as never);
+  }
+
   it("lægger point til med $inc på den rigtige bruger", async () => {
-    const updateOne = jest
-      .spyOn(UserModel, "updateOne")
-      .mockResolvedValue({ matchedCount: 1 } as never);
+    const update = mockUpdate({ totalPoints: 50 });
 
     await incrementPoints("665f1f77bcf86cd799439011", 20);
 
-    expect(updateOne).toHaveBeenCalledWith(
+    expect(update).toHaveBeenCalledWith(
       { _id: "665f1f77bcf86cd799439011" },
       { $inc: { totalPoints: 20 } },
+      expect.objectContaining({ new: true }),
     );
   });
 
+  it("returnerer brugerens nye totalPoints", async () => {
+    mockUpdate({ totalPoints: 50 });
+
+    await expect(incrementPoints("665f1f77bcf86cd799439011", 20)).resolves.toBe(50);
+  });
+
   it("kaster 404, hvis brugeren ikke findes", async () => {
-    jest.spyOn(UserModel, "updateOne").mockResolvedValue({ matchedCount: 0 } as never);
+    mockUpdate(null);
 
     await expect(incrementPoints("665f1f77bcf86cd799439011", 10)).rejects.toMatchObject({
       status: 404,
@@ -42,11 +53,11 @@ describe("incrementPoints", () => {
   });
 
   it.each([0, -5, 1.5, NaN])("afviser ugyldigt beløb %p uden at røre databasen", async (amount) => {
-    const updateOne = jest.spyOn(UserModel, "updateOne");
+    const update = jest.spyOn(UserModel, "findOneAndUpdate");
 
     await expect(incrementPoints("665f1f77bcf86cd799439011", amount)).rejects.toMatchObject({
       status: 400,
     });
-    expect(updateOne).not.toHaveBeenCalled();
+    expect(update).not.toHaveBeenCalled();
   });
 });

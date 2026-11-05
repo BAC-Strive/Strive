@@ -31,3 +31,11 @@ habitRouter.delete("/:id", async (req, res) => {
   await habitService.deleteHabit(req.userId!, req.params.id);
   res.status(204).end();
 });
+
+
+// POST /habits/:id/complete: gennemfører en vane for i dag
+habitRouter.post("/:id/complete", async (req, res) => {
+  // Kaster HabitNotFoundError (404) eller HabitAlreadyCompletedError (409)
+  const result = await habitService.completeHabit(req.userId!, req.params.id);
+  res.status(201).json(result);
+});

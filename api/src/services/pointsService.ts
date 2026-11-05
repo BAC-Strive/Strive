@@ -15,14 +15,20 @@ export function pointsFor(difficulty: Difficulty): number {
   return POINTS[difficulty];
 }
 
-// Lægger point til brugerens totalPoints. $inc er atomisk, så samtidige kald ikke overskriver hinanden.
-export async function incrementPoints(userId: Types.ObjectId | string, amount: number): Promise<void> {
+// Lægger point til brugerens totalPoints og returnerer det nye total.
+// $inc er atomisk, så samtidige kald ikke overskriver hinanden.
+export async function incrementPoints(userId: Types.ObjectId | string, amount: number): Promise<number> {
   if (!Number.isInteger(amount) || amount <= 0) {
     throw new ValidationError("amount skal være et positivt heltal");
   }
 
-  const result = await UserModel.updateOne({ _id: userId }, { $inc: { totalPoints: amount } });
-  if (result.matchedCount === 0) {
+  const user = await UserModel.findOneAndUpdate(
+    { _id: userId },
+    { $inc: { totalPoints: amount } },
+    { new: true, projection: { totalPoints: 1 } },
+  ).lean();
+  if (!user) {
     throw new AppError(404, "Brugeren findes ikke");
   }
+  return user.totalPoints;
 }
