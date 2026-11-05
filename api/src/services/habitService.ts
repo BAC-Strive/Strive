@@ -8,7 +8,7 @@ import {
 } from "../errors/habitErrors";
 import type { CreateHabitInput } from "../validation/habit";
 import { pointsFor, incrementPoints, decrementPoints } from "./pointsService";
-import { calculate, startOfDay } from "./streakService";
+import { calculate, isCompletedToday, startOfDay } from "./streakService";
 
 export type CompleteResult = {
   pointsAwarded: number; // point optjent ved denne gennemførsel
@@ -22,9 +22,28 @@ export type UndoResult = {
   totalPoints: number; // brugerens samlede point efter fortrydelsen
 };
 
-// Henter brugerens vaner, nyeste først
+// Henter brugerens vaner, nyeste først, med streak og om de er gennemført i dag (bruges af HabitCard)
 export async function getOverview(userId: string) {
-  return HabitModel.find({ userId }).sort({ createdAt: -1 }).lean();
+  const habits = await HabitModel.find({ userId }).sort({ createdAt: -1 }).lean();
+
+  // Henter alle vanernes gennemførsler i ét kald i stedet for ét kald pr. vane
+  const logs = await HabitLogModel.find({ habitId: { $in: habits.map((h) => h._id) } })
+    .select("habitId completedAt")
+    .lean();
+
+  const today = new Date();
+  return habits.map((habit) => {
+    // String(), fordi ObjectId'er ikke kan sammenlignes med ===
+    const dates = logs
+      .filter((log) => String(log.habitId) === String(habit._id))
+      .map((log) => log.completedAt);
+
+    return {
+      ...habit,
+      streak: calculate(dates, habit.weekdays, today),
+      completedToday: isCompletedToday(dates, today),
+    };
+  });
 }
 
 // Opretter en vane (US6). Input er allerede valideret og renset af createHabitSchema.
