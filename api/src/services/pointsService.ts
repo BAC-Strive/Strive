@@ -1,7 +1,6 @@
 import { Types } from "mongoose";
 import { UserModel } from "../models/user";
 import { AppError } from "../errors/appError";
-import { ValidationError } from "../errors/authErrors";
 
 export type Difficulty = "let" | "middel" | "svær";
 
@@ -19,13 +18,33 @@ export function pointsFor(difficulty: Difficulty): number {
 // $inc er atomisk, så samtidige kald ikke overskriver hinanden.
 export async function incrementPoints(userId: Types.ObjectId | string, amount: number): Promise<number> {
   if (!Number.isInteger(amount) || amount <= 0) {
-    throw new ValidationError("amount skal være et positivt heltal");
+    // Kodefejl og ikke brugerinput, så almindelig Error (giver 500)
+    throw new Error("amount skal være et positivt heltal");
   }
 
   const user = await UserModel.findOneAndUpdate(
     { _id: userId },
     { $inc: { totalPoints: amount } },
     { new: true, projection: { totalPoints: 1 } },
+  ).lean();
+  if (!user) {
+    throw new AppError(404, "Brugeren findes ikke");
+  }
+  return user.totalPoints;
+}
+
+// Trækker point fra brugerens totalPoints og returnerer det nye total. Totalen bliver aldrig under 0.
+// Bruger en pipeline-opdatering, så fradraget og grænsen ved 0 sker atomisk i ét kald.
+export async function decrementPoints(userId: Types.ObjectId | string, amount: number): Promise<number> {
+  if (!Number.isInteger(amount) || amount <= 0) {
+    // Kodefejl og ikke brugerinput, så almindelig Error (giver 500)
+    throw new Error("amount skal være et positivt heltal");
+  }
+
+  const user = await UserModel.findOneAndUpdate(
+    { _id: userId },
+    [{ $set: { totalPoints: { $max: [0, { $subtract: ["$totalPoints", amount] }] } } }],
+    { new: true, updatePipeline: true, projection: { totalPoints: 1 } },
   ).lean();
   if (!user) {
     throw new AppError(404, "Brugeren findes ikke");

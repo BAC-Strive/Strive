@@ -40,6 +40,16 @@ describe("calculate", () => {
   it("giver ikke streak for gennemførelse på en ikke-planlagt dag", () => {
     expect(calculate([d(15)], MWF, d(15))).toBe(0);
   });
+
+  it("ignorerer en log uden for planen og tæller kun planlagte dage", () => {
+    // 15. (torsdag) er ikke planlagt, så loggen den dag hverken tæller med eller bryder noget
+    expect(calculate([d(14), d(15), d(16)], MWF, d(16))).toBe(2);
+  });
+
+  it("tæller dage i træk hen over skiftet fra sommertid til vintertid", () => {
+    // Sommertiden slutter søndag 25. oktober 2026, så døgnet er 25 timer
+    expect(calculate([d(24), d(25), d(26)], [0, 1, 2, 3, 4, 5, 6], d(26))).toBe(3);
+  });
 });
 
 describe("isCompletedToday", () => {
