@@ -4,16 +4,20 @@ import { useFocusEffect } from "@react-navigation/native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { Ionicons } from "@expo/vector-icons";
 import type { RootStackParamList } from "../navigation/RootNavigator";
-import { completeHabit, deleteHabit, getHabits } from "../api/habits";
+import { completeHabit, deleteHabit, getHabits, undoCompleteHabit } from "../api/habits";
 import { ApiError } from "../api/client";
+import { useAuth } from "../auth/AuthContext";
 import type { Habit, OverviewHabit } from "../types/habit";
 import HabitCard from "../components/HabitCard";
+import PointsBadge from "../components/PointsBadge";
 import DeleteHabitDialog from "../components/DeleteHabitDialog";
 import { COLORS } from "../theme/colors";
 
 type Props = NativeStackScreenProps<RootStackParamList, "HabitOverview">;
 
 export default function HabitOverviewScreen({ navigation }: Props) {
+  const { user, updateTotalPoints } = useAuth();
+
   const [habits, setHabits] = useState<OverviewHabit[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -51,14 +55,24 @@ export default function HabitOverviewScreen({ navigation }: Props) {
     }, []),
   );
 
+  // Opdaterer én vane i listen med de felter, der er ændret
+  function updateHabit(id: string, changes: Partial<OverviewHabit>) {
+    setHabits((current) =>
+      current.map((habit) => (habit._id === id ? { ...habit, ...changes } : habit)),
+    );
+  }
+
   // Kaldes af HabitCard. Fejl sendes videre, så kortet selv kan vise beskeden.
   async function handleComplete(id: string) {
     const result = await completeHabit(id);
-    setHabits((current) =>
-      current.map((habit) =>
-        habit._id === id ? { ...habit, completedToday: true, streak: result.streak } : habit,
-      ),
-    );
+    updateHabit(id, { completedToday: true, streak: result.streak });
+    updateTotalPoints(result.totalPoints);
+  }
+
+  async function handleUndo(id: string) {
+    const result = await undoCompleteHabit(id);
+    updateHabit(id, { completedToday: false, streak: result.streak });
+    updateTotalPoints(result.totalPoints);
   }
 
   function closeDeleteDialog() {
@@ -102,6 +116,9 @@ export default function HabitOverviewScreen({ navigation }: Props) {
     );
   }
 
+  // Samme regel som backendens completeHabit: 0 = søndag … 6 = lørdag
+  const today = new Date().getDay();
+
   return (
     <>
       <FlatList
@@ -110,7 +127,7 @@ export default function HabitOverviewScreen({ navigation }: Props) {
         data={habits}
         keyExtractor={(habit) => habit._id}
         renderItem={({ item }) => (
-          // Langt tryk på kortet åbner slet-dialogen. Knappen "Gennemfør" i kortet virker stadig som normalt.
+          // Langt tryk på kortet åbner slet-dialogen. Knapperne i kortet virker stadig som normalt.
           <Pressable
             onLongPress={() => setHabitToDelete(item)}
             accessibilityHint="Hold inde for at slette vanen"
@@ -120,11 +137,18 @@ export default function HabitOverviewScreen({ navigation }: Props) {
               name={item.name}
               streak={item.streak}
               completedToday={item.completedToday}
+              scheduledToday={item.weekdays.includes(today)}
               onComplete={handleComplete}
+              onUndo={handleUndo}
             />
           </Pressable>
         )}
-        ListHeaderComponent={error ? <Text style={styles.error}>{error}</Text> : undefined}
+        ListHeaderComponent={
+          <View style={styles.header}>
+            {user && <PointsBadge points={user.totalPoints} />}
+            {error && <Text style={styles.error}>{error}</Text>}
+          </View>
+        }
         ListEmptyComponent={
           error ? undefined : <Text style={styles.empty}>Du har ingen vaner endnu. Opret din første!</Text>
         }
@@ -155,8 +179,9 @@ const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: COLORS.background },
   center: { justifyContent: "center", alignItems: "center" },
   content: { padding: 24, gap: 12 },
+  header: { gap: 8 },
   empty: { fontSize: 15, color: COLORS.muted, textAlign: "center", marginVertical: 16 },
-  error: { fontSize: 14, color: COLORS.error, marginBottom: 4 },
+  error: { fontSize: 14, color: COLORS.error },
   newButton: {
     flexDirection: "row",
     justifyContent: "center",
