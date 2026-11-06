@@ -93,7 +93,7 @@ export default function HabitFormScreen({ navigation }: Props) {
             placeholder="Fx Træn 30 minutter"
             placeholderTextColor={COLORS.muted}
             maxLength={50}
-            returnKeyType="done"
+            returnKeyType="done" // Lukker kun tastaturet, så brugeren også vælger dage og sværhedsgrad
           />
         </View>
 
@@ -129,7 +129,7 @@ export default function HabitFormScreen({ navigation }: Props) {
                   onPress={() => setDifficulty(option.value)}
                   style={[styles.difficulty, selected && styles.difficultySelected]}
                   accessibilityRole="radio"
-                  accessibilityState={{ selected }}
+                  accessibilityState={{ checked: selected }}
                 >
                   <Text style={[styles.difficultyText, selected && styles.difficultySelectedText]}>
                     {option.label}
@@ -140,7 +140,7 @@ export default function HabitFormScreen({ navigation }: Props) {
           </View>
         </View>
 
-        {error && <Text style={styles.error}>{error}</Text>}
+        {error ? <Text style={styles.error}>{error}</Text> : null}
 
         <Pressable
           onPress={handleSubmit}

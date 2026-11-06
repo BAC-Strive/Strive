@@ -26,7 +26,7 @@ export default function DeleteHabitDialog({ habit, isDeleting, error, onCancel, 
           <Text style={styles.title}>Slet "{habit?.name}"?</Text>
           <Text style={styles.message}>Vanen og alle dens registreringer slettes permanent.</Text>
 
-          {error && <Text style={styles.error}>{error}</Text>}
+          {error ? <Text style={styles.error}>{error}</Text> : null}
 
           <View style={styles.buttons}>
             <Pressable
