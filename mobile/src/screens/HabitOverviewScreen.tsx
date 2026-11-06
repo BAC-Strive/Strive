@@ -15,6 +15,22 @@ import { COLORS } from "../theme/colors";
 
 type Props = NativeStackScreenProps<RootStackParamList, "HabitOverview">;
 
+// Index passer med Date.getDay() (0 = søndag) og Date.getMonth() (0 = januar)
+const DAY_NAMES = ["Søndag", "Mandag", "Tirsdag", "Onsdag", "Torsdag", "Fredag", "Lørdag"];
+const MONTH_NAMES = ["jan.", "feb.", "mar.", "apr.", "maj", "jun.", "jul.", "aug.", "sep.", "okt.", "nov.", "dec."];
+
+// Hilsen efter tidspunktet på dagen
+function greeting(hour: number): string {
+  if (hour < 10) return "Godmorgen";
+  if (hour < 18) return "Goddag";
+  return "Godaften";
+}
+
+// Fx "Torsdag 17. sep."
+function formatDate(date: Date): string {
+  return `${DAY_NAMES[date.getDay()]} ${date.getDate()}. ${MONTH_NAMES[date.getMonth()]}`;
+}
+
 export default function HabitOverviewScreen({ navigation }: Props) {
   const { user, updateTotalPoints } = useAuth();
 
@@ -116,8 +132,9 @@ export default function HabitOverviewScreen({ navigation }: Props) {
     );
   }
 
+  const now = new Date();
   // Samme regel som backendens completeHabit: 0 = søndag … 6 = lørdag
-  const today = new Date().getDay();
+  const today = now.getDay();
 
   return (
     <>
@@ -145,7 +162,16 @@ export default function HabitOverviewScreen({ navigation }: Props) {
         )}
         ListHeaderComponent={
           <View style={styles.header}>
-            {user && <PointsBadge points={user.totalPoints} />}
+            <View style={styles.headerRow}>
+              <View style={styles.headerText}>
+                <Text style={styles.greeting}>
+                  {greeting(now.getHours())}
+                  {user ? `, ${user.username}` : ""}
+                </Text>
+                <Text style={styles.date}>{formatDate(now)}</Text>
+              </View>
+              {user && <PointsBadge points={user.totalPoints} />}
+            </View>
             {error && <Text style={styles.error}>{error}</Text>}
           </View>
         }
@@ -179,7 +205,11 @@ const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: COLORS.background },
   center: { justifyContent: "center", alignItems: "center" },
   content: { padding: 24, gap: 12 },
-  header: { gap: 8 },
+  header: { gap: 8, marginBottom: 8 },
+  headerRow: { flexDirection: "row", alignItems: "center", gap: 12 },
+  headerText: { flex: 1 },
+  greeting: { fontSize: 15, color: COLORS.muted },
+  date: { fontSize: 26, color: COLORS.text, marginTop: 2 },
   empty: { fontSize: 15, color: COLORS.muted, textAlign: "center", marginVertical: 16 },
   error: { fontSize: 14, color: COLORS.error },
   newButton: {
