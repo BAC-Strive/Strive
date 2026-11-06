@@ -63,9 +63,19 @@ function mockLogFind(result: unknown) {
   habitLogModel.find.mockReturnValue({ select: jest.fn().mockReturnValue({ lean }) });
 }
 
-// Nulstiller alle mocks, så testene ikke påvirker hinanden
+// Fast tidspunkt (fredag 16. okt. 2026 kl. 12) for alle tests. Servicen bruger new Date(),
+// så uden et fast ur kunne testene fejle tilfældigt, hvis de køres lige omkring midnat.
+const FIXED_NOW = new Date(2026, 9, 16, 12, 0);
+
+// Nulstiller alle mocks og fryser uret, så testene ikke påvirker hinanden
 beforeEach(() => {
   jest.resetAllMocks();
+  jest.useFakeTimers({ now: FIXED_NOW });
+});
+
+// Slår det faste ur fra igen efter hver test
+afterEach(() => {
+  jest.useRealTimers();
 });
 
 describe("getOverview", () => {
@@ -335,7 +345,8 @@ describe("undoCompleteHabit", () => {
 
 describe("completeHabit, hvis vanen ikke er planlagt i dag", () => {
   // Alle ugedage undtagen i dag
-  const notToday = [0, 1, 2, 3, 4, 5, 6].filter((day) => day !== new Date().getDay());
+  // FIXED_NOW bruges, fordi linjen kører, før beforeEach har frosset uret
+  const notToday = [0, 1, 2, 3, 4, 5, 6].filter((day) => day !== FIXED_NOW.getDay());
   const habit = { _id: habitId, userId, name: "Løb en tur", weekdays: notToday, difficulty: "let" };
 
   it("kaster HabitNotScheduledError og opretter ingen log og giver ingen point", async () => {

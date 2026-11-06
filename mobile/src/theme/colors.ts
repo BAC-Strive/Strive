@@ -10,4 +10,5 @@ export const COLORS = {
   greenMuted: "#CFE9DF", // deaktiveret "Gjort i dag"-knap
   error: "#C0392B",
   white: "#FFFFFF",
+  overlay: "rgba(0, 0, 0, 0.35)", // mørk baggrund bag dialoger
 };

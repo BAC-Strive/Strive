@@ -172,7 +172,7 @@ export default function HabitOverviewScreen({ navigation }: Props) {
               </View>
               {user && <PointsBadge points={user.totalPoints} />}
             </View>
-              {error ? <Text style={styles.error}>{error}</Text> : null}
+            {error ? <Text style={styles.error}>{error}</Text> : null}
           </View>
         }
         ListEmptyComponent={

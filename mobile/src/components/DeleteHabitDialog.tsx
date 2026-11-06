@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { ActivityIndicator, Modal, Pressable, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import type { Habit } from "../types/habit";
@@ -13,24 +14,35 @@ type Props = {
 
 // Bekræftelse før en vane slettes (US9). Oversigten styrer, hvad der sker ved "Slet".
 export default function DeleteHabitDialog({ habit, isDeleting, error, onCancel, onConfirm }: Props) {
+  // Husker det sidste navn, så titlen ikke bliver tom, mens dialogen toner ud (habit er så allerede null)
+  const [shownName, setShownName] = useState(habit?.name ?? "");
+  if (habit && habit.name !== shownName) {
+    setShownName(habit.name);
+  }
+
+  // Lukning er slået fra under sletning, så en færdig sletning ikke kan lukke en anden vanes dialog
+  function handleClose() {
+    if (!isDeleting) onCancel();
+  }
+
   return (
     <Modal
       visible={habit !== null}
       transparent
       animationType="fade"
-      onRequestClose={onCancel} // Androids tilbage-knap lukker dialogen
+      onRequestClose={handleClose} // Androids tilbage-knap lukker dialogen
     >
       <View style={styles.overlay}>
         <View style={styles.dialog}>
           <Ionicons name="warning-outline" size={32} color={COLORS.error} />
-          <Text style={styles.title}>Slet "{habit?.name}"?</Text>
+          <Text style={styles.title}>Slet "{shownName}"?</Text>
           <Text style={styles.message}>Vanen og alle dens registreringer slettes permanent.</Text>
 
           {error ? <Text style={styles.error}>{error}</Text> : null}
 
           <View style={styles.buttons}>
             <Pressable
-              onPress={onCancel}
+              onPress={handleClose}
               disabled={isDeleting}
               style={({ pressed }) => [styles.button, styles.cancel, pressed && styles.pressed]}
               accessibilityRole="button"
@@ -61,7 +73,7 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: "center",
     padding: 32,
-    backgroundColor: "rgba(0, 0, 0, 0.35)", // mørk baggrund bag dialogen
+    backgroundColor: COLORS.overlay,
   },
   dialog: { backgroundColor: COLORS.background, borderRadius: 24, padding: 24 },
   title: { fontSize: 20, fontWeight: "700", color: COLORS.text, textAlign: "center", marginTop: 12 },
