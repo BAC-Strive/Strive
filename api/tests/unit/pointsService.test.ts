@@ -35,7 +35,7 @@ describe("incrementPoints", () => {
     expect(update).toHaveBeenCalledWith(
       { _id: "665f1f77bcf86cd799439011" },
       { $inc: { totalPoints: 20 } },
-      expect.objectContaining({ new: true }),
+      expect.objectContaining({ returnDocument: "after" }),
     );
   });
 
@@ -83,7 +83,7 @@ describe("decrementPoints", () => {
     expect(update).toHaveBeenCalledWith(
       { _id: "665f1f77bcf86cd799439011" },
       [{ $set: { totalPoints: { $max: [0, { $subtract: ["$totalPoints", 20] }] } } }],
-      expect.objectContaining({ new: true, updatePipeline: true }),
+      expect.objectContaining({ returnDocument: "after", updatePipeline: true }),
     );
   });
 

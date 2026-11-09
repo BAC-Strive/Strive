@@ -25,7 +25,7 @@ export async function incrementPoints(userId: Types.ObjectId | string, amount: n
   const user = await UserModel.findOneAndUpdate(
     { _id: userId },
     { $inc: { totalPoints: amount } },
-    { new: true, projection: { totalPoints: 1 } },
+    { returnDocument: "after", projection: { totalPoints: 1 } },
   ).lean();
   if (!user) {
     throw new AppError(404, "Brugeren findes ikke");
@@ -44,7 +44,7 @@ export async function decrementPoints(userId: Types.ObjectId | string, amount: n
   const user = await UserModel.findOneAndUpdate(
     { _id: userId },
     [{ $set: { totalPoints: { $max: [0, { $subtract: ["$totalPoints", amount] }] } } }],
-    { new: true, updatePipeline: true, projection: { totalPoints: 1 } },
+    { returnDocument: "after", updatePipeline: true, projection: { totalPoints: 1 } },
   ).lean();
   if (!user) {
     throw new AppError(404, "Brugeren findes ikke");
