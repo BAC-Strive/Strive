@@ -1,13 +1,18 @@
 import { z } from "zod";
 import { ValidationError } from "../errors/authErrors";
 
-// Renser først (mellemrum, store bogstaver), og tjekker så formatet
-const email = z.string().trim().toLowerCase().pipe(z.email("Ugyldig email"));
+// Delte felter, så oprettelse og redigering af profil følger samme regler
+export const emailField = z.string().trim().toLowerCase().pipe(z.email("Ugyldig email"));
+export const usernameField = z
+  .string()
+  .trim()
+  .min(1, "Fornavn skal udfyldes")
+  .max(50, "Fornavn må højst være 50 tegn");
 
 export const registerSchema = z.object({
-  username: z.string().trim().min(1, "Fornavn skal udfyldes").max(50, "Fornavn må højst være 50 tegn"),
-  email,
-  // Max 72, fordi bcrypt ignorerer alt efter 72 tegn
+  username: usernameField,
+  email: emailField,
+  // Max 72, da bcrypt kun bruger de første 72 bytes (æ, ø og å fylder 2 bytes hver)
   password: z
     .string()
     .min(8, "Adgangskoden skal være mindst 8 tegn")
@@ -15,7 +20,7 @@ export const registerSchema = z.object({
 });
 
 export const loginSchema = z.object({
-  email,
+  email: emailField,
   password: z.string().min(1, "Adgangskode skal udfyldes"),
 });
 
