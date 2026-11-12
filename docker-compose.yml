@@ -10,6 +10,7 @@ services:
     build: ./api
     ports:
       - "3000:3000"
+    env_file: ./api/.env
     environment:
       PORT: 3000
       MONGO_URI: mongodb://mongo:27017/strive
