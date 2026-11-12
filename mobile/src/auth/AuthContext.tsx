@@ -1,6 +1,8 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import * as authApi from "../api/auth";
 import type { User } from "../api/auth";
+import * as usersApi from "../api/users";
+import type { ProfileChanges } from "../api/users";
 import { setUnauthorizedHandler } from "../api/client";
 import { deleteToken, getToken } from "./tokenStorage";
 
@@ -12,6 +14,7 @@ type AuthContextValue = {
   register: (username: string, email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
   updateTotalPoints: (totalPoints: number) => void; // opdaterer brugerens point efter gennemfør/fortryd
+  updateProfile: (changes: ProfileChanges) => Promise<void>; // gemmer ændringer i profilen og opdaterer brugeren (US3)
 };
 
 // Delt auth-state for hele appen; null betyder at der ikke er nogen AuthProvider
@@ -64,9 +67,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser((current) => (current ? { ...current, totalPoints } : current));
   }
 
+  // Gemmer ændringerne i backend og opdaterer brugeren med svaret, så nyt fornavn og ny email vises overalt.
+  // Kaster en ApiError ved fejl, fx 409, som profilskærmen viser til brugeren.
+  async function updateProfile(changes: ProfileChanges) {
+    setUser(await usersApi.updateProfile(changes));
+  }
+
   // AuthContext.Provider gør auth-state tilgængelig for alle skærme, som bruger useAuth()
   return (
-    <AuthContext.Provider value={{ user, isLoading, login, register, logout, updateTotalPoints }}>
+    <AuthContext.Provider value={{ user, isLoading, login, register, logout, updateTotalPoints, updateProfile }}>
       {children}
     </AuthContext.Provider>
   );

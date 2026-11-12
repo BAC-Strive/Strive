@@ -1,27 +1,27 @@
-import { ActivityIndicator, Pressable, Text, View } from "react-native";
+import { ActivityIndicator, Pressable, View } from "react-native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
+import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "../auth/AuthContext";
 import { COLORS } from "../theme/colors";
 import LoginSignupScreen from "../screens/LoginSignupScreen";
 import HabitOverviewScreen from "../screens/HabitOverviewScreen";
 import HabitFormScreen from "../screens/HabitFormScreen";
-import { Ionicons } from "@expo/vector-icons";
+import ProfileScreen from "../screens/ProfileScreen";
 
 export type RootStackParamList = {
   LoginSignup: undefined;
   HabitOverview: undefined;
   HabitForm: undefined;
+  Profile: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
-// Vises i titelbjælken på "Mine vaner". Navigationen skifter selv til login, når user bliver null.
-function LogoutButton() {
-  const { logout } = useAuth();
-
+// Vises i titelbjælken på "Mine vaner" og åbner profilen
+function ProfileButton({ onPress }: { onPress: () => void }) {
   return (
-    <Pressable onPress={logout} hitSlop={8} accessibilityRole="button" accessibilityLabel="Log ud">
-      <Ionicons name="log-out-outline" size={24} color={COLORS.greenDark} />
+    <Pressable onPress={onPress} hitSlop={8} accessibilityRole="button" accessibilityLabel="Profil">
+      <Ionicons name="person-circle-outline" size={26} color={COLORS.greenDark} />
     </Pressable>
   );
 }
@@ -48,9 +48,14 @@ export default function RootNavigator() {
           <Stack.Screen
             name="HabitOverview"
             component={HabitOverviewScreen}
-            options={{ title: "Mine vaner", headerRight: () => <LogoutButton /> }}
+            // options som funktion giver adgang til navigation, så knappen kan åbne profilen
+            options={({ navigation }) => ({
+              title: "Mine vaner",
+              headerRight: () => <ProfileButton onPress={() => navigation.navigate("Profile")} />,
+            })}
           />
           <Stack.Screen name="HabitForm" component={HabitFormScreen} options={{ title: "Ny vane" }} />
+          <Stack.Screen name="Profile" component={ProfileScreen} options={{ title: "Profil" }} />
         </>
       ) : (
         <Stack.Screen name="LoginSignup" component={LoginSignupScreen} options={{ headerShown: false }} />
