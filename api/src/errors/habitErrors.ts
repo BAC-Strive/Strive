@@ -55,3 +55,10 @@ export class NotEnoughPointsError extends AppError {
         super(409, "Du har ikke nok point");
     }
 }
+
+// Brugeren har brugt de point, en gennemførsel gav, så den kan ikke fortrydes
+export class PointsAlreadySpentError extends AppError {
+    constructor() {
+        super(409, "Du har brugt pointene fra gennemførslen og kan derfor ikke fortryde den");
+    }
+}

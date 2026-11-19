@@ -7,7 +7,7 @@ import {
 } from "../../src/services/pointsService";
 import { UserModel } from "../../src/models/user";
 import { AppError } from "../../src/errors/appError";
-import { NotEnoughPointsError } from "../../src/errors/habitErrors";
+import { NotEnoughPointsError, PointsAlreadySpentError } from "../../src/errors/habitErrors";
 
 describe("pointsFor", () => {
   it("giver 10 point for let", () => {
@@ -81,21 +81,31 @@ describe("decrementPoints", () => {
     return jest.spyOn(UserModel, "findOneAndUpdate").mockReturnValue({ lean } as never);
   }
 
-  it("trækker point fra og lader totalen stoppe ved 0", async () => {
+  it("trækker kun point, hvis brugeren har nok (totalPoints >= beløb), og returnerer det nye total", async () => {
     const update = mockUpdate({ totalPoints: 30 });
 
     const total = await decrementPoints("665f1f77bcf86cd799439011", 20);
 
     expect(total).toBe(30);
+    // Kontrollen står i selve filteret, så totalen aldrig kan komme under 0
     expect(update).toHaveBeenCalledWith(
-      { _id: "665f1f77bcf86cd799439011" },
-      [{ $set: { totalPoints: { $max: [0, { $subtract: ["$totalPoints", 20] }] } } }],
-      expect.objectContaining({ returnDocument: "after", updatePipeline: true }),
+      { _id: "665f1f77bcf86cd799439011", totalPoints: { $gte: 20 } },
+      { $inc: { totalPoints: -20 } },
+      expect.objectContaining({ returnDocument: "after" }),
     );
+  });
+
+  it("kaster PointsAlreadySpentError (409), hvis brugeren har brugt pointene", async () => {
+    mockUpdate(null);
+    jest.spyOn(UserModel, "exists").mockResolvedValue({ _id: "665f1f77bcf86cd799439011" } as never);
+
+    await expect(decrementPoints("665f1f77bcf86cd799439011", 20)).rejects.toThrow(PointsAlreadySpentError);
+    await expect(decrementPoints("665f1f77bcf86cd799439011", 20)).rejects.toMatchObject({ status: 409 });
   });
 
   it("kaster 404, hvis brugeren ikke findes", async () => {
     mockUpdate(null);
+    jest.spyOn(UserModel, "exists").mockResolvedValue(null as never);
 
     await expect(decrementPoints("665f1f77bcf86cd799439011", 10)).rejects.toMatchObject({
       status: 404,

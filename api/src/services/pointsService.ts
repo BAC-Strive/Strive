@@ -1,7 +1,7 @@
 import { Types } from "mongoose";
 import { UserModel } from "../models/user";
 import { AppError } from "../errors/appError";
-import { NotEnoughPointsError } from "../errors/habitErrors";
+import { NotEnoughPointsError, PointsAlreadySpentError } from "../errors/habitErrors";
 
 export type Difficulty = "let" | "middel" | "svær";
 
@@ -42,29 +42,14 @@ export async function incrementPoints(userId: Types.ObjectId | string, amount: n
   return user.totalPoints;
 }
 
-// Trækker point fra brugerens totalPoints og returnerer det nye total. Totalen bliver aldrig under 0.
-// Bruger en pipeline-opdatering, så fradraget og grænsen ved 0 sker atomisk i ét kald.
-export async function decrementPoints(userId: Types.ObjectId | string, amount: number): Promise<number> {
-  if (!Number.isInteger(amount) || amount <= 0) {
-    // Kodefejl og ikke brugerinput, så almindelig Error (giver 500)
-    throw new Error("amount skal være et positivt heltal");
-  }
-
-  const user = await UserModel.findOneAndUpdate(
-    { _id: userId },
-    [{ $set: { totalPoints: { $max: [0, { $subtract: ["$totalPoints", amount] }] } } }],
-    { returnDocument: "after", updatePipeline: true, projection: { totalPoints: 1 } },
-  ).lean();
-  if (!user) {
-    throw new AppError(404, "Brugeren findes ikke");
-  }
-  return user.totalPoints;
-}
-
-// Bruger point (fx på et skjold) og returnerer det nye total. Fejler med "Du har ikke nok point",
-// hvis brugeren ikke har nok. Kontrollen sker i selve opdateringen (totalPoints >= amount), så to
-// samtidige køb ikke kan sende totalen under 0.
-export async function spendPoints(userId: Types.ObjectId | string, amount: number): Promise<number> {
+// Trækker point fra brugerens totalPoints og returnerer det nye total. Totalen kan aldrig komme under 0:
+// kontrollen (totalPoints >= amount) står i selve opdateringen, så to samtidige træk ikke begge kan
+// lykkes. Har brugeren ikke nok, kaster vi den fejl, som den, der kalder, giver med.
+async function takePoints(
+  userId: Types.ObjectId | string,
+  amount: number,
+  notEnough: () => Error,
+): Promise<number> {
   if (!Number.isInteger(amount) || amount <= 0) {
     // Kodefejl og ikke brugerinput, så almindelig Error (giver 500)
     throw new Error("amount skal være et positivt heltal");
@@ -80,7 +65,18 @@ export async function spendPoints(userId: Types.ObjectId | string, amount: numbe
     if (!(await UserModel.exists({ _id: userId }))) {
       throw new AppError(404, "Brugeren findes ikke");
     }
-    throw new NotEnoughPointsError();
+    throw notEnough();
   }
   return user.totalPoints;
+}
+
+// Bruger point (fx på et skjold). Fejler med "Du har ikke nok point".
+export function spendPoints(userId: Types.ObjectId | string, amount: number): Promise<number> {
+  return takePoints(userId, amount, () => new NotEnoughPointsError());
+}
+
+// Trækker de point tilbage, en gennemførsel gav (ved fortryd). Har brugeren brugt pointene, fejler det,
+// så man ikke kan gennemføre, bruge pointene og fortryde for at få dem gratis.
+export function decrementPoints(userId: Types.ObjectId | string, amount: number): Promise<number> {
+  return takePoints(userId, amount, () => new PointsAlreadySpentError());
 }

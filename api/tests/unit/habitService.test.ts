@@ -7,6 +7,7 @@ import {
   HabitAlreadyCompletedError,
   HabitNotCompletedError,
   HabitNotScheduledError,
+  PointsAlreadySpentError,
 } from "../../src/errors/habitErrors";
 import { incrementPoints, decrementPoints } from "../../src/services/pointsService";
 
@@ -351,6 +352,22 @@ describe("undoCompleteHabit", () => {
       completedAt: logDate,
       pointsAwarded: 20,
     });
+  });
+});
+
+describe("undoCompleteHabit, hvis pointene er brugt", () => {
+  const habit = { _id: habitId, userId, name: "Løb en tur", weekdays: [0, 1, 2, 3, 4, 5, 6], difficulty: "middel" };
+  const logDate = new Date(2026, 9, 16);
+  const log = { _id: new Types.ObjectId(), habitId, completedAt: logDate, pointsAwarded: 20 };
+
+  it("afviser fortrydelsen og lægger gennemførslen tilbage, så man ikke går i minus", async () => {
+    habitModel.findOne.mockResolvedValue(habit);
+    habitLogModel.findOneAndDelete.mockResolvedValue(log);
+    decrementPointsMock.mockRejectedValue(new PointsAlreadySpentError());
+
+    await expect(habitService.undoCompleteHabit(userId, habitId)).rejects.toThrow(PointsAlreadySpentError);
+
+    expect(habitLogModel.create).toHaveBeenCalledWith({ habitId, completedAt: logDate, pointsAwarded: 20 });
   });
 });
 

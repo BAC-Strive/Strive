@@ -13,6 +13,7 @@ import {
   HabitNotProtectedError,
   NoStreakToProtectError,
   NotEnoughPointsError,
+  PointsAlreadySpentError,
 } from "../../src/errors/habitErrors";
 
 // Servicen mockes, så testene kun handler om HTTP-laget: auth, validering og statuskoder
@@ -315,5 +316,18 @@ describe("DELETE /habits/:id/protect", () => {
 
     expect(res.status).toBe(401);
     expect(rewards.unprotectStreak).not.toHaveBeenCalled();
+  });
+});
+
+describe("DELETE /habits/:id/complete, pointene er brugt", () => {
+  it("svarer 409, hvis brugeren har brugt de point, gennemførslen gav", async () => {
+    service.undoCompleteHabit.mockRejectedValue(new PointsAlreadySpentError());
+
+    const res = await request(app).delete(`/habits/${habitId}/complete`).set(auth);
+
+    expect(res.status).toBe(409);
+    expect(res.body).toEqual({
+      message: "Du har brugt pointene fra gennemførslen og kan derfor ikke fortryde den",
+    });
   });
 });
