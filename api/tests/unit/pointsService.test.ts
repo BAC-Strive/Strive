@@ -1,6 +1,13 @@
-import { pointsFor, incrementPoints, decrementPoints } from "../../src/services/pointsService";
+import {
+  pointsFor,
+  incrementPoints,
+  decrementPoints,
+  spendPoints,
+  protectionCostFor,
+} from "../../src/services/pointsService";
 import { UserModel } from "../../src/models/user";
 import { AppError } from "../../src/errors/appError";
+import { NotEnoughPointsError } from "../../src/errors/habitErrors";
 
 describe("pointsFor", () => {
   it("giver 10 point for let", () => {
@@ -101,6 +108,63 @@ describe("decrementPoints", () => {
     await expect(decrementPoints("665f1f77bcf86cd799439011", amount)).rejects.toThrow(
       "amount skal være et positivt heltal",
     );
+    expect(update).not.toHaveBeenCalled();
+  });
+});
+
+describe("protectionCostFor", () => {
+  it("koster 3 gange dagens point for vanen", () => {
+    expect(protectionCostFor("let")).toBe(30);
+    expect(protectionCostFor("middel")).toBe(60);
+    expect(protectionCostFor("svær")).toBe(90);
+  });
+});
+
+describe("spendPoints", () => {
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  function mockUpdate(result: unknown) {
+    const lean = jest.fn().mockResolvedValue(result);
+    return jest.spyOn(UserModel, "findOneAndUpdate").mockReturnValue({ lean } as never);
+  }
+
+  it("trækker kun point, hvis brugeren har nok (totalPoints >= beløb), og returnerer det nye total", async () => {
+    const update = mockUpdate({ totalPoints: 40 });
+
+    const total = await spendPoints("665f1f77bcf86cd799439011", 60);
+
+    expect(total).toBe(40);
+    // Kontrollen står i selve filteret, så to samtidige køb ikke kan sende totalen under 0
+    expect(update).toHaveBeenCalledWith(
+      { _id: "665f1f77bcf86cd799439011", totalPoints: { $gte: 60 } },
+      { $inc: { totalPoints: -60 } },
+      expect.objectContaining({ returnDocument: "after" }),
+    );
+  });
+
+  it("kaster NotEnoughPointsError (409), hvis brugeren ikke har nok point", async () => {
+    mockUpdate(null);
+    jest.spyOn(UserModel, "exists").mockResolvedValue({ _id: "665f1f77bcf86cd799439011" } as never);
+
+    await expect(spendPoints("665f1f77bcf86cd799439011", 60)).rejects.toThrow(NotEnoughPointsError);
+    await expect(spendPoints("665f1f77bcf86cd799439011", 60)).rejects.toMatchObject({ status: 409 });
+  });
+
+  it("kaster 404, hvis brugeren ikke findes", async () => {
+    mockUpdate(null);
+    jest.spyOn(UserModel, "exists").mockResolvedValue(null as never);
+
+    await expect(spendPoints("665f1f77bcf86cd799439011", 60)).rejects.toMatchObject({ status: 404 });
+  });
+
+  it.each([0, -5, 1.5, NaN])("afviser ugyldigt beløb %p uden at røre databasen", async (amount) => {
+    const update = jest.spyOn(UserModel, "findOneAndUpdate");
+
+    const result = spendPoints("665f1f77bcf86cd799439011", amount);
+    await expect(result).rejects.toThrow("amount skal være et positivt heltal");
+    await expect(result).rejects.not.toBeInstanceOf(AppError);
     expect(update).not.toHaveBeenCalled();
   });
 });
