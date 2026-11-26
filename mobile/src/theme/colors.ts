@@ -8,6 +8,8 @@ export const COLORS = {
   greenDark: "#17785C",
   greenLight: "#E8F5F0", // baggrund på et gennemført vanekort
   greenMuted: "#CFE9DF", // deaktiveret "Gjort i dag"-knap
+  shield: "#2F6DB5", // skjold (beskyttet streak)
+  shieldLight: "#E8F0FA", // baggrund på et beskyttet vanekort
   error: "#C0392B",
   white: "#FFFFFF",
   overlay: "rgba(0, 0, 0, 0.35)", // mørk baggrund bag dialoger

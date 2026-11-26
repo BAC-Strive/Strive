@@ -4,7 +4,14 @@ import { useFocusEffect } from "@react-navigation/native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { Ionicons } from "@expo/vector-icons";
 import type { RootStackParamList } from "../navigation/RootNavigator";
-import { completeHabit, deleteHabit, getHabits, undoCompleteHabit } from "../api/habits";
+import {
+  completeHabit,
+  deleteHabit,
+  getHabits,
+  protectHabit,
+  undoCompleteHabit,
+  unprotectHabit,
+} from "../api/habits";
 import { ApiError } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
 import type { Habit, OverviewHabit } from "../types/habit";
@@ -38,57 +45,98 @@ export default function HabitOverviewScreen({ navigation }: Props) {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Kort besked under et kort (vane-id → tekst), fx at et skjold er refunderet
+  const [notices, setNotices] = useState<Record<string, string>>({});
+
   // Vanen, der er ved at blive slettet. null betyder, at dialogen er lukket.
   const [habitToDelete, setHabitToDelete] = useState<Habit | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
+  // Henter vanerne fra serveren. isActive bliver false, hvis man forlader skærmen, før svaret kommer,
+  // så vi ikke opdaterer en skærm, der ikke vises.
+  const loadHabits = useCallback(async (isActive: () => boolean = () => true) => {
+    try {
+      const data = await getHabits();
+      if (isActive()) {
+        setHabits(data);
+        setError(null);
+      }
+    } catch (err) {
+      if (isActive()) setError(err instanceof ApiError ? err.message : "Kunne ikke hente vaner");
+    } finally {
+      if (isActive()) setIsLoading(false);
+    }
+  }, []);
+
   // Henter vanerne, hver gang skærmen vises, også når man kommer tilbage fra "Ny vane".
   // useCallback sørger for, at det kun sker ved fokus og ikke ved hver render.
   useFocusEffect(
     useCallback(() => {
-      // Bliver false, hvis man forlader skærmen, før svaret kommer, så vi ikke opdaterer en skærm, der ikke vises
-      let isActive = true;
+      // Beskeder som "Du fik 60 point tilbage" hører til den handling, man lige har lavet, så de ryddes,
+      // når man kommer tilbage til oversigten. Ikke efter hver genindlæsning, for så ville de forsvinde med det samme.
+      setNotices((current) => (Object.keys(current).length > 0 ? {} : current));
 
-      async function loadHabits() {
-        try {
-          const data = await getHabits();
-          if (isActive) {
-            setHabits(data);
-            setError(null);
-          }
-        } catch (err) {
-          if (isActive) setError(err instanceof ApiError ? err.message : "Kunne ikke hente vaner");
-        } finally {
-          if (isActive) setIsLoading(false);
-        }
-      }
-
-      loadHabits();
+      let active = true;
+      loadHabits(() => active);
       return () => {
-        isActive = false;
+        active = false;
       };
-    }, []),
+    }, [loadHabits]),
   );
 
-  // Opdaterer én vane i listen med de felter, der er ændret
-  function updateHabit(id: string, changes: Partial<OverviewHabit>) {
-    setHabits((current) =>
-      current.map((habit) => (habit._id === id ? { ...habit, ...changes } : habit)),
-    );
+  // Kører en handling fra kortet. Bagefter hentes listen igen, så streak, skjold og priser altid er serverens.
+  // Er kortet og serveren uenige (409, fx "allerede gennemført" fra en anden telefon), hentes listen også,
+  // så kortet viser den rigtige tilstand. Fejlen sendes videre, så kortet selv kan vise beskeden.
+  async function runAction(action: () => Promise<void>) {
+    try {
+      await action();
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 409) await loadHabits();
+      throw err;
+    }
+    await loadHabits();
   }
 
-  // Kaldes af HabitCard. Fejl sendes videre, så kortet selv kan vise beskeden.
+  // Sætter (eller fjerner, hvis text er null) beskeden under en vanes kort
+  function setNotice(id: string, text: string | null) {
+    setNotices((current) => {
+      const { [id]: _old, ...rest } = current;
+      return text ? { ...rest, [id]: text } : rest;
+    });
+  }
+
   async function handleComplete(id: string) {
-    const result = await completeHabit(id);
-    updateHabit(id, { completedToday: true, streak: result.streak });
-    updateTotalPoints(result.totalPoints);
+    await runAction(async () => {
+      const result = await completeHabit(id);
+      updateTotalPoints(result.totalPoints);
+      // Forklarer, hvorfor saldoen stiger mere end vanens egne point, hvis dagen var beskyttet
+      setNotice(id, result.pointsRefunded > 0 ? `Du fik ${result.pointsRefunded} point tilbage for skjoldet` : null);
+    });
   }
 
   async function handleUndo(id: string) {
-    const result = await undoCompleteHabit(id);
-    updateHabit(id, { completedToday: false, streak: result.streak });
-    updateTotalPoints(result.totalPoints);
+    await runAction(async () => {
+      const result = await undoCompleteHabit(id);
+      updateTotalPoints(result.totalPoints);
+      setNotice(id, null);
+    });
+  }
+
+  async function handleProtect(id: string) {
+    await runAction(async () => {
+      const result = await protectHabit(id);
+      updateTotalPoints(result.totalPoints);
+      setNotice(id, null);
+    });
+  }
+
+  async function handleUnprotect(id: string) {
+    await runAction(async () => {
+      const result = await unprotectHabit(id);
+      updateTotalPoints(result.totalPoints);
+      setNotice(id, null);
+    });
   }
 
   function closeDeleteDialog() {
@@ -133,8 +181,6 @@ export default function HabitOverviewScreen({ navigation }: Props) {
   }
 
   const now = new Date();
-  // Samme regel som backendens completeHabit: 0 = søndag … 6 = lørdag
-  const today = now.getDay();
 
   return (
     <>
@@ -154,9 +200,15 @@ export default function HabitOverviewScreen({ navigation }: Props) {
               name={item.name}
               streak={item.streak}
               completedToday={item.completedToday}
-              scheduledToday={item.weekdays.includes(today)}
+              scheduledToday={item.scheduledToday}
+              protectedToday={item.protectedToday}
+              protection={item.protection}
+              notice={notices[item._id]}
+              totalPoints={user?.totalPoints}
               onComplete={handleComplete}
               onUndo={handleUndo}
+              onProtect={handleProtect}
+              onUnprotect={handleUnprotect}
             />
           </Pressable>
         )}
