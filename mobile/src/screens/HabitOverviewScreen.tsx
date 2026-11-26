@@ -73,6 +73,10 @@ export default function HabitOverviewScreen({ navigation }: Props) {
   // useCallback sørger for, at det kun sker ved fokus og ikke ved hver render.
   useFocusEffect(
     useCallback(() => {
+      // Beskeder som "Du fik 60 point tilbage" hører til den handling, man lige har lavet, så de ryddes,
+      // når man kommer tilbage til oversigten. Ikke efter hver genindlæsning, for så ville de forsvinde med det samme.
+      setNotices((current) => (Object.keys(current).length > 0 ? {} : current));
+
       let active = true;
       loadHabits(() => active);
       return () => {
