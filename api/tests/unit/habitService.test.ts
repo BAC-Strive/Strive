@@ -7,8 +7,8 @@ import {
   HabitAlreadyCompletedError,
   HabitNotCompletedError,
   HabitNotScheduledError,
-  PointsAlreadySpentError,
 } from "../../src/errors/habitErrors";
+import { PointsAlreadySpentError } from "../../src/errors/pointsErrors";
 import { incrementPoints, decrementPoints } from "../../src/services/pointsService";
 
 // incrementPoints og decrementPoints mockes, så testene ikke rører brugermodellen. pointsFor er uændret.

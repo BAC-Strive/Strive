@@ -61,6 +61,7 @@ describe("isCompletedToday", () => {
     expect(isCompletedToday([d(15)], d(16))).toBe(false);
   });
 });
+
 describe("calculate med skjold (beskyttede dage)", () => {
   const EVERY_DAY = [0, 1, 2, 3, 4, 5, 6];
 

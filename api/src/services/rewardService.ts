@@ -4,6 +4,7 @@ import {
   HabitNotFoundError,
   HabitAlreadyCompletedError,
   HabitAlreadyProtectedError,
+  HabitDayTakenError,
   HabitNotProtectedError,
   HabitNotScheduledError,
   NoStreakToProtectError,
@@ -102,9 +103,10 @@ export async function protectStreak(userId: string, habitId: string): Promise<Pr
       pointsSpent: status.cost,
     });
   } catch (err) {
-    // 11000 = to kald kom samtidigt, og dagen har fået en log, siden vi læste logs ovenfor
+    // 11000 = to kald kom samtidigt, og dagen har fået en log, siden vi læste logs ovenfor.
+    // Vi ved ikke, om det blev en gennemførsel eller et skjold, så beskeden dækker begge dele.
     if ((err as { code?: number }).code === 11000) {
-      throw new HabitAlreadyProtectedError();
+      throw new HabitDayTakenError();
     }
     throw err;
   }

@@ -6,11 +6,12 @@ import {
   HabitNotFoundError,
   HabitAlreadyCompletedError,
   HabitAlreadyProtectedError,
+  HabitDayTakenError,
   HabitNotProtectedError,
   HabitNotScheduledError,
   NoStreakToProtectError,
-  NotEnoughPointsError,
 } from "../../src/errors/habitErrors";
+import { NotEnoughPointsError } from "../../src/errors/pointsErrors";
 import { incrementPoints, spendPoints } from "../../src/services/pointsService";
 
 // incrementPoints og spendPoints mockes, så testene ikke rører brugermodellen. protectionCostFor er uændret.
@@ -162,12 +163,12 @@ describe("protectStreak", () => {
     expect(spendPointsMock).not.toHaveBeenCalled();
   });
 
-  it("kaster HabitAlreadyProtectedError, hvis to kald kommer samtidig (duplicate key)", async () => {
+  it("kaster HabitDayTakenError, hvis to kald kommer samtidig (duplicate key)", async () => {
     habitModel.findOne.mockResolvedValue(habit);
     mockLogs([{ completedAt: day(15) }]);
     habitLogModel.create.mockRejectedValue({ code: 11000 });
 
-    await expect(rewardService.protectStreak(userId, habitId)).rejects.toThrow(HabitAlreadyProtectedError);
+    await expect(rewardService.protectStreak(userId, habitId)).rejects.toThrow(HabitDayTakenError);
 
     expect(spendPointsMock).not.toHaveBeenCalled();
   });

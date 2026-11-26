@@ -7,7 +7,7 @@ import {
 } from "../../src/services/pointsService";
 import { UserModel } from "../../src/models/user";
 import { AppError } from "../../src/errors/appError";
-import { NotEnoughPointsError, PointsAlreadySpentError } from "../../src/errors/habitErrors";
+import { NotEnoughPointsError, PointsAlreadySpentError } from "../../src/errors/pointsErrors";
 
 describe("pointsFor", () => {
   it("giver 10 point for let", () => {

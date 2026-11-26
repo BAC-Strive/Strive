@@ -49,16 +49,9 @@ export class HabitNotProtectedError extends AppError {
     }
 }
 
-// Brugeren har ikke point nok til at købe et skjold
-export class NotEnoughPointsError extends AppError {
+// To kald kom samtidigt, og dagen er blevet gennemført eller beskyttet, siden vi tjekkede
+export class HabitDayTakenError extends AppError {
     constructor() {
-        super(409, "Du har ikke nok point");
-    }
-}
-
-// Brugeren har brugt de point, en gennemførsel gav, så den kan ikke fortrydes
-export class PointsAlreadySpentError extends AppError {
-    constructor() {
-        super(409, "Du har brugt pointene fra gennemførslen og kan derfor ikke fortryde den");
+        super(409, "Vanen er allerede gennemført eller beskyttet i dag");
     }
 }

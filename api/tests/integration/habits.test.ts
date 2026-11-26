@@ -11,10 +11,10 @@ import {
   HabitNotScheduledError,
   HabitAlreadyProtectedError,
   HabitNotProtectedError,
+  HabitDayTakenError,
   NoStreakToProtectError,
-  NotEnoughPointsError,
-  PointsAlreadySpentError,
 } from "../../src/errors/habitErrors";
+import { NotEnoughPointsError, PointsAlreadySpentError } from "../../src/errors/pointsErrors";
 
 // Servicen mockes, så testene kun handler om HTTP-laget: auth, validering og statuskoder
 jest.mock("../../src/services/habitService");
@@ -255,6 +255,12 @@ describe("POST /habits/:id/protect", () => {
     ["409 hvis dagen allerede er beskyttet", new HabitAlreadyProtectedError(), 409, "Vanen er allerede beskyttet i dag"],
     ["409 hvis der ingen streak er", new NoStreakToProtectError(), 409, "Der er ingen streak at beskytte"],
     ["409 hvis der ikke er point nok", new NotEnoughPointsError(), 409, "Du har ikke nok point"],
+    [
+      "409 hvis dagen blev gennemført eller beskyttet samtidig",
+      new HabitDayTakenError(),
+      409,
+      "Vanen er allerede gennemført eller beskyttet i dag",
+    ],
   ])("svarer %s", async (_navn, error, status, message) => {
     rewards.protectStreak.mockRejectedValue(error);
 
@@ -320,14 +326,12 @@ describe("DELETE /habits/:id/protect", () => {
 });
 
 describe("DELETE /habits/:id/complete, pointene er brugt", () => {
-  it("svarer 409, hvis brugeren har brugt de point, gennemførslen gav", async () => {
+  it("svarer 409, hvis brugeren ikke har point nok til at fortryde gennemførslen", async () => {
     service.undoCompleteHabit.mockRejectedValue(new PointsAlreadySpentError());
 
     const res = await request(app).delete(`/habits/${habitId}/complete`).set(auth);
 
     expect(res.status).toBe(409);
-    expect(res.body).toEqual({
-      message: "Du har brugt pointene fra gennemførslen og kan derfor ikke fortryde den",
-    });
+    expect(res.body).toEqual({ message: "Du har ikke point nok til at fortryde gennemførslen" });
   });
 });

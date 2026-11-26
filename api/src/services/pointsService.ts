@@ -1,7 +1,7 @@
 import { Types } from "mongoose";
 import { UserModel } from "../models/user";
 import { AppError } from "../errors/appError";
-import { NotEnoughPointsError, PointsAlreadySpentError } from "../errors/habitErrors";
+import { NotEnoughPointsError, PointsAlreadySpentError } from "../errors/pointsErrors";
 
 export type Difficulty = "let" | "middel" | "svær";
 

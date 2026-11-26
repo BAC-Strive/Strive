@@ -120,7 +120,7 @@ Alle routes undtagen `/health` og `/auth/register` og `/auth/login` kræver head
 
 Fejl: `400` ved ugyldigt input eller hvis vanen ikke skal gennemføres (eller beskyttes) i dag, `404` hvis vanen ikke findes, `409` hvis vanen allerede er gennemført i dag, eller hvis emailen allerede er i brug.
 
-For skjold og fortryd giver `409` også: vanen er allerede beskyttet eller ikke beskyttet i dag, der er ingen streak at beskytte, brugeren har ikke point nok, eller pointene fra en gennemførsel er brugt, så den ikke kan fortrydes.
+For skjold og fortryd giver `409` også: vanen er allerede beskyttet eller ikke beskyttet i dag, der er ingen streak at beskytte, brugeren har ikke point nok, eller brugeren ikke har point nok til at fortryde en gennemførsel (pointene er brugt).
 
 **Skjold (streak-beskyttelse):** et skjold gælder kun for i dag og kun på en dag, vanen er planlagt til. Det tæller ikke med i streaken, men bryder den heller ikke. Man kan ikke beskytte en vane uden streak eller en dag, der allerede er gennemført eller beskyttet. Gennemfører man dagen alligevel, refunderes skjoldet. Point kan ikke komme under 0.
 
