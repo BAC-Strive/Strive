@@ -143,23 +143,33 @@ export default function HabitOverviewScreen({ navigation }: Props) {
         contentContainerStyle={styles.content}
         data={habits}
         keyExtractor={(habit) => habit._id}
-        renderItem={({ item }) => (
-          // Langt tryk på kortet åbner slet-dialogen. Knapperne i kortet virker stadig som normalt.
-          <Pressable
-            onLongPress={() => setHabitToDelete(item)}
-            accessibilityHint="Hold inde for at slette vanen"
-          >
-            <HabitCard
-              id={item._id}
-              name={item.name}
-              streak={item.streak}
-              completedToday={item.completedToday}
-              scheduledToday={item.weekdays.includes(today)}
-              onComplete={handleComplete}
-              onUndo={handleUndo}
-            />
-          </Pressable>
+                renderItem={({ item }) => (
+          <View style={styles.row}>
+            <View style={styles.cardWrapper}>
+              <HabitCard
+                id={item._id}
+                name={item.name}
+                streak={item.streak}
+                completedToday={item.completedToday}
+                scheduledToday={item.weekdays.includes(today)}
+                onComplete={handleComplete}
+                onUndo={handleUndo}
+              />
+            </View>
+
+            {/* Åbner bekræftelsen. Ligger uden for HabitCard. */}
+            <Pressable
+              onPress={() => setHabitToDelete(item)}
+              hitSlop={8}
+              style={({ pressed }) => pressed && styles.pressed}
+              accessibilityRole="button"
+              accessibilityLabel={`Slet ${item.name}`}
+            >
+              <Ionicons name="trash-outline" size={22} color={COLORS.error} />
+            </Pressable>
+          </View>
         )}
+
         ListHeaderComponent={
           <View style={styles.header}>
             <View style={styles.headerRow}>
@@ -208,6 +218,8 @@ const styles = StyleSheet.create({
   header: { gap: 8, marginBottom: 8 },
   headerRow: { flexDirection: "row", alignItems: "center", gap: 12 },
   headerText: { flex: 1 },
+  row: { flexDirection: "row", alignItems: "center", gap: 8},
+  cardWrapper: { flex: 1},
   greeting: { fontSize: 15, color: COLORS.muted },
   date: { fontSize: 26, color: COLORS.text, marginTop: 2 },
   empty: { fontSize: 15, color: COLORS.muted, textAlign: "center", marginVertical: 16 },
