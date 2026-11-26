@@ -45,6 +45,9 @@ export default function HabitOverviewScreen({ navigation }: Props) {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Kort besked under et kort (vane-id → tekst), fx at et skjold er refunderet
+  const [notices, setNotices] = useState<Record<string, string>>({});
+
   // Vanen, der er ved at blive slettet. null betyder, at dialogen er lukket.
   const [habitToDelete, setHabitToDelete] = useState<Habit | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -91,10 +94,20 @@ export default function HabitOverviewScreen({ navigation }: Props) {
     await loadHabits();
   }
 
+  // Sætter (eller fjerner, hvis text er null) beskeden under en vanes kort
+  function setNotice(id: string, text: string | null) {
+    setNotices((current) => {
+      const { [id]: _old, ...rest } = current;
+      return text ? { ...rest, [id]: text } : rest;
+    });
+  }
+
   async function handleComplete(id: string) {
     await runAction(async () => {
       const result = await completeHabit(id);
       updateTotalPoints(result.totalPoints);
+      // Forklarer, hvorfor saldoen stiger mere end vanens egne point, hvis dagen var beskyttet
+      setNotice(id, result.pointsRefunded > 0 ? `Du fik ${result.pointsRefunded} point tilbage for skjoldet` : null);
     });
   }
 
@@ -102,6 +115,7 @@ export default function HabitOverviewScreen({ navigation }: Props) {
     await runAction(async () => {
       const result = await undoCompleteHabit(id);
       updateTotalPoints(result.totalPoints);
+      setNotice(id, null);
     });
   }
 
@@ -109,6 +123,7 @@ export default function HabitOverviewScreen({ navigation }: Props) {
     await runAction(async () => {
       const result = await protectHabit(id);
       updateTotalPoints(result.totalPoints);
+      setNotice(id, null);
     });
   }
 
@@ -116,6 +131,7 @@ export default function HabitOverviewScreen({ navigation }: Props) {
     await runAction(async () => {
       const result = await unprotectHabit(id);
       updateTotalPoints(result.totalPoints);
+      setNotice(id, null);
     });
   }
 
@@ -183,6 +199,7 @@ export default function HabitOverviewScreen({ navigation }: Props) {
               scheduledToday={item.scheduledToday}
               protectedToday={item.protectedToday}
               protection={item.protection}
+              notice={notices[item._id]}
               totalPoints={user?.totalPoints}
               onComplete={handleComplete}
               onUndo={handleUndo}

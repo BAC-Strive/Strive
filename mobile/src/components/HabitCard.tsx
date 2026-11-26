@@ -12,6 +12,7 @@ type Props = {
   scheduledToday?: boolean; // Er vanen planlagt til i dag? Hvis ikke, vises "Ikke i dag" (backenden afviser med 400)
   protectedToday?: boolean; // Har vanen et skjold i dag? Så er streaken sikret, og man kan stadig gennemføre
   protection?: Protection; // Kan der købes et skjold? Og hvad koster det?
+  notice?: string; // Kort besked under kortet, fx at et skjold er refunderet
   totalPoints?: number; // Brugerens point, så "Beskyt" er grå, hvis man ikke har råd
   onComplete: (id: string) => Promise<void>;
   onUndo?: (id: string) => Promise<void>; // Vises som "Fortryd", når vanen er gennemført i dag
@@ -27,6 +28,7 @@ export default function HabitCard({
   scheduledToday = true,
   protectedToday = false,
   protection,
+  notice,
   totalPoints,
   onComplete,
   onUndo,
@@ -112,8 +114,9 @@ export default function HabitCard({
         <Text style={styles.name}>{name}</Text>
         <Text style={styles.streak}>🔥 {streak} {streak === 1 ? "dags" : "dages"} streak</Text>
         {protectedToday && !completedToday ? (
-          <Text style={styles.shieldText}>🛡 Beskyttet i dag. Gennemfør for at få skjoldet refunderet.</Text>
+          <Text style={styles.shieldText}>🛡 Beskyttet i dag. Gennemfør alligevel for at få pointene tilbage.</Text>
         ) : null}
+        {notice ? <Text style={styles.notice}>{notice}</Text> : null}
         {error ? <Text style={styles.error}>{error}</Text> : null}
       </View>
 
@@ -225,6 +228,9 @@ const styles = StyleSheet.create({
   },
   shieldText: {
     color: COLORS.shield,
+  },
+  notice: {
+    color: COLORS.greenDark,
   },
   error: {
     color: COLORS.error,
