@@ -8,6 +8,7 @@ import {
   HabitNotCompletedError,
   HabitNotScheduledError,
 } from "../../src/errors/habitErrors";
+import { PointsAlreadySpentError } from "../../src/errors/pointsErrors";
 import { incrementPoints, decrementPoints } from "../../src/services/pointsService";
 
 // incrementPoints og decrementPoints mockes, så testene ikke rører brugermodellen. pointsFor er uændret.
@@ -38,12 +39,17 @@ jest.mock("../../src/models/habitLogs", () => ({
     create: jest.fn(),
     find: jest.fn(),
     findOneAndDelete: jest.fn(),
+    findOneAndUpdate: jest.fn(),
+    updateOne: jest.fn(),
   },
 }));
 
 // Fortæller TypeScript, at metoderne nu er mocks, så vi kan bruge fx mockResolvedValue
 const habitModel = HabitModel as unknown as Record<"find" | "create" | "findOne" | "deleteOne", jest.Mock>;
-const habitLogModel = HabitLogModel as unknown as Record<"deleteMany" | "deleteOne" | "create" | "find" | "findOneAndDelete", jest.Mock>;
+const habitLogModel = HabitLogModel as unknown as Record<
+  "deleteMany" | "deleteOne" | "create" | "find" | "findOneAndDelete" | "findOneAndUpdate" | "updateOne",
+  jest.Mock
+>;
 
 const userId = new Types.ObjectId().toString();
 const habitId = new Types.ObjectId().toString();
@@ -172,6 +178,11 @@ describe("completeHabit", () => {
   const allDays = [0, 1, 2, 3, 4, 5, 6];
   const habit = { _id: habitId, userId, name: "Løb en tur", weekdays: allDays, difficulty: "middel" };
 
+  // create returnerer den gemte log, som servicen læser _id fra. Tests, der tester fejl, overstyrer den.
+  beforeEach(() => {
+    habitLogModel.create.mockResolvedValue({ _id: new Types.ObjectId() });
+  });
+
   // find(...).select(...).lean() er en kæde, så mocken skal returnere objekter med select og lean
   function mockLogs(dates: Date[]) {
     const lean = jest.fn().mockResolvedValue(dates.map((completedAt) => ({ completedAt })));
@@ -198,7 +209,7 @@ describe("completeHabit", () => {
     });
   });
 
-  it("lægger vanens point til brugeren og returnerer pointsAwarded, streak og totalPoints", async () => {
+  it("lægger vanens point til brugeren og returnerer pointsAwarded, pointsRefunded, streak og totalPoints", async () => {
     habitModel.findOne.mockResolvedValue(habit);
     incrementPointsMock.mockResolvedValue(70);
     mockLogs([today()]);
@@ -206,7 +217,7 @@ describe("completeHabit", () => {
     const result = await habitService.completeHabit(userId, habitId);
 
     expect(incrementPointsMock).toHaveBeenCalledWith(userId, 20);
-    expect(result).toEqual({ pointsAwarded: 20, streak: 1, totalPoints: 70 });
+    expect(result).toEqual({ pointsAwarded: 20, pointsRefunded: 0, streak: 1, totalPoints: 70 });
   });
 
   it("leder kun efter vanen blandt brugerens egne", async () => {
@@ -290,6 +301,7 @@ describe("undoCompleteHabit", () => {
     expect(habitLogModel.findOneAndDelete).toHaveBeenCalledWith({
       habitId,
       completedAt: new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate()),
+      isProtected: { $ne: true }, // et skjold er ikke en gennemførsel og må ikke fortrydes her
     });
     expect(decrementPointsMock).toHaveBeenCalledWith(userId, 20);
     expect(result).toEqual({ pointsRemoved: 20, streak: 0, totalPoints: 50 });
@@ -343,6 +355,22 @@ describe("undoCompleteHabit", () => {
   });
 });
 
+describe("undoCompleteHabit, hvis pointene er brugt", () => {
+  const habit = { _id: habitId, userId, name: "Løb en tur", weekdays: [0, 1, 2, 3, 4, 5, 6], difficulty: "middel" };
+  const logDate = new Date(2026, 9, 16);
+  const log = { _id: new Types.ObjectId(), habitId, completedAt: logDate, pointsAwarded: 20 };
+
+  it("afviser fortrydelsen og lægger gennemførslen tilbage, så man ikke går i minus", async () => {
+    habitModel.findOne.mockResolvedValue(habit);
+    habitLogModel.findOneAndDelete.mockResolvedValue(log);
+    decrementPointsMock.mockRejectedValue(new PointsAlreadySpentError());
+
+    await expect(habitService.undoCompleteHabit(userId, habitId)).rejects.toThrow(PointsAlreadySpentError);
+
+    expect(habitLogModel.create).toHaveBeenCalledWith({ habitId, completedAt: logDate, pointsAwarded: 20 });
+  });
+});
+
 describe("completeHabit, hvis vanen ikke er planlagt i dag", () => {
   // Alle ugedage undtagen i dag
   // FIXED_NOW bruges, fordi linjen kører, før beforeEach har frosset uret
@@ -356,5 +384,138 @@ describe("completeHabit, hvis vanen ikke er planlagt i dag", () => {
 
     expect(habitLogModel.create).not.toHaveBeenCalled();
     expect(incrementPointsMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("getOverview, skjold og beskyttelse", () => {
+  const everyDay = [0, 1, 2, 3, 4, 5, 6];
+  // FIXED_NOW er fredag 16. okt. 2026. Opdelt i dage for at være nem at læse.
+  const day = (date: number) => new Date(2026, 9, date);
+
+  function overviewFor(logs: unknown[], weekdays = everyDay) {
+    mockFind([{ _id: habitId, userId, ...input, weekdays }]);
+    mockLogFind(logs);
+    return habitService.getOverview(userId).then((result) => result[0]);
+  }
+
+  it("tæller ikke et skjold med i streaken og lader det ikke bryde den", async () => {
+    // Onsdag gennemført, torsdag beskyttet, i dag (fredag) endnu ikke gjort
+    const habit = await overviewFor([
+      { habitId, completedAt: day(14) },
+      { habitId, completedAt: day(15), isProtected: true },
+    ]);
+
+    expect(habit).toMatchObject({ streak: 1, completedToday: false, protectedToday: false });
+  });
+
+  it("viser, at et skjold kan købes, og hvad det koster (3 gange dagens point)", async () => {
+    const habit = await overviewFor([{ habitId, completedAt: day(15) }]);
+
+    expect(habit.protection).toEqual({ available: true, cost: 60, reason: null });
+  });
+
+  it("kan ikke beskytte en vane uden streak", async () => {
+    const habit = await overviewFor([]);
+
+    expect(habit.protection).toEqual({ available: false, cost: 60, reason: "Ingen streak at beskytte" });
+  });
+
+  it("kan ikke beskytte en dag, der allerede er beskyttet, og viser protectedToday", async () => {
+    const habit = await overviewFor([
+      { habitId, completedAt: day(15) },
+      { habitId, completedAt: day(16), isProtected: true },
+    ]);
+
+    expect(habit).toMatchObject({ protectedToday: true, completedToday: false });
+    expect(habit.protection).toMatchObject({ available: false, reason: "Allerede beskyttet i dag" });
+  });
+
+  it("kan ikke beskytte en dag, der allerede er gennemført", async () => {
+    const habit = await overviewFor([{ habitId, completedAt: day(16) }]);
+
+    expect(habit).toMatchObject({ completedToday: true, protectedToday: false });
+    expect(habit.protection).toMatchObject({ available: false, reason: "Allerede gennemført i dag" });
+  });
+
+  it("kan ikke beskytte en dag, vanen ikke er planlagt, og sender scheduledToday med", async () => {
+    const notToday = everyDay.filter((d) => d !== FIXED_NOW.getDay());
+    const habit = await overviewFor([{ habitId, completedAt: day(15) }], notToday);
+
+    expect(habit.scheduledToday).toBe(false);
+    expect(habit.protection).toMatchObject({ available: false, reason: "Ikke planlagt i dag" });
+  });
+
+  it("behandler gamle logs uden isProtected som gennemførte", async () => {
+    const habit = await overviewFor([{ habitId, completedAt: day(16) }]);
+
+    expect(habit.completedToday).toBe(true);
+  });
+});
+
+describe("completeHabit på en beskyttet dag", () => {
+  const habit = { _id: habitId, userId, name: "Løb en tur", weekdays: [0, 1, 2, 3, 4, 5, 6], difficulty: "middel" };
+  const shield = { _id: new Types.ObjectId(), habitId, isProtected: true, pointsSpent: 60 };
+
+  function mockLogs(dates: Date[]) {
+    const lean = jest.fn().mockResolvedValue(dates.map((completedAt) => ({ completedAt })));
+    habitLogModel.find.mockReturnValue({ select: jest.fn().mockReturnValue({ lean }) });
+  }
+
+  it("gør skjoldet til en gennemførsel i stedet for at oprette en ny log", async () => {
+    habitModel.findOne.mockResolvedValue(habit);
+    habitLogModel.findOneAndUpdate.mockResolvedValue(shield);
+    incrementPointsMock.mockResolvedValue(180);
+    mockLogs([new Date(2026, 9, 16)]);
+
+    await habitService.completeHabit(userId, habitId);
+
+    expect(habitLogModel.findOneAndUpdate).toHaveBeenCalledWith(
+      { habitId, completedAt: new Date(2026, 9, 16), isProtected: true },
+      { isProtected: false, pointsAwarded: 20, pointsSpent: 0 },
+      { returnDocument: "before" },
+    );
+    expect(habitLogModel.create).not.toHaveBeenCalled();
+  });
+
+  it("refunderer skjoldets pris oveni dagens point i ét kald", async () => {
+    habitModel.findOne.mockResolvedValue(habit);
+    habitLogModel.findOneAndUpdate.mockResolvedValue(shield);
+    incrementPointsMock.mockResolvedValue(180);
+    mockLogs([new Date(2026, 9, 16)]);
+
+    const result = await habitService.completeHabit(userId, habitId);
+
+    expect(incrementPointsMock).toHaveBeenCalledTimes(1);
+    expect(incrementPointsMock).toHaveBeenCalledWith(userId, 20 + 60);
+    expect(result).toEqual({ pointsAwarded: 20, pointsRefunded: 60, streak: 1, totalPoints: 180 });
+  });
+
+  it("gør skjoldet tilbage til et skjold, hvis point ikke kan lægges til", async () => {
+    habitModel.findOne.mockResolvedValue(habit);
+    habitLogModel.findOneAndUpdate.mockResolvedValue(shield);
+    const pointsError = new Error("Brugeren findes ikke");
+    incrementPointsMock.mockRejectedValue(pointsError);
+
+    await expect(habitService.completeHabit(userId, habitId)).rejects.toBe(pointsError);
+
+    expect(habitLogModel.updateOne).toHaveBeenCalledWith(
+      { _id: shield._id },
+      { isProtected: true, pointsAwarded: 0, pointsSpent: 60 },
+    );
+    expect(habitLogModel.deleteOne).not.toHaveBeenCalled();
+  });
+
+  it("opretter en almindelig log, når dagen ikke er beskyttet, og refunderer ingenting", async () => {
+    habitModel.findOne.mockResolvedValue(habit);
+    habitLogModel.findOneAndUpdate.mockResolvedValue(null);
+    habitLogModel.create.mockResolvedValue({ _id: new Types.ObjectId() });
+    incrementPointsMock.mockResolvedValue(120);
+    mockLogs([new Date(2026, 9, 16)]);
+
+    const result = await habitService.completeHabit(userId, habitId);
+
+    expect(habitLogModel.create).toHaveBeenCalledTimes(1);
+    expect(incrementPointsMock).toHaveBeenCalledWith(userId, 20);
+    expect(result.pointsRefunded).toBe(0);
   });
 });

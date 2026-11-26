@@ -110,13 +110,19 @@ Alle routes undtagen `/health` og `/auth/register` og `/auth/login` kræver head
 | `POST /auth/register` | Opretter bruger og logger ind | 201 `{ token, user }` |
 | `POST /auth/login` | Logger ind med email og adgangskode | 200 `{ token, user }` |
 | `GET /auth/me` | Henter den indloggede bruger | 200 `{ user }` |
-| `GET /habits` | Brugerens vaner, nyeste først, med `streak` og `completedToday` | 200 |
+| `GET /habits` | Brugerens vaner, nyeste først, med `streak`, `completedToday`, `protectedToday`, `scheduledToday` og `protection { available, cost, reason }` | 200 |
 | `POST /habits` | Opretter en vane (`name`, `weekdays`, `difficulty`) | 201 |
 | `DELETE /habits/:id` | Sletter en vane og dens gennemførsler | 204 |
-| `POST /habits/:id/complete` | Gennemfører vanen i dag | 201 `{ pointsAwarded, streak, totalPoints }` |
-| `DELETE /habits/:id/complete` | Fortryder dagens gennemførsel | 200 `{ pointsRemoved, streak, totalPoints }` |
+| `POST /habits/:id/complete` | Gennemfører vanen i dag. Er dagen beskyttet med et skjold, bliver skjoldet til en gennemførsel, og prisen refunderes | 201 `{ pointsAwarded, pointsRefunded, streak, totalPoints }` |
+| `DELETE /habits/:id/complete` | Fortryder dagens gennemførsel. Fejler, hvis pointene er brugt | 200 `{ pointsRemoved, streak, totalPoints }` |
+| `POST /habits/:id/protect` | Køber et skjold til i dag, så streaken ikke brydes (koster 3 gange dagens point for vanen) | 201 `{ pointsSpent, totalPoints }` |
+| `DELETE /habits/:id/protect` | Fortryder dagens skjold og refunderer prisen | 200 `{ pointsRefunded, totalPoints }` |
 
-Fejl: `400` ved ugyldigt input eller hvis vanen ikke skal gennemføres i dag, `404` hvis vanen ikke findes, `409` hvis vanen allerede er gennemført i dag, eller hvis emailen allerede er i brug.
+Fejl: `400` ved ugyldigt input eller hvis vanen ikke skal gennemføres (eller beskyttes) i dag, `404` hvis vanen ikke findes, `409` hvis vanen allerede er gennemført i dag, eller hvis emailen allerede er i brug.
+
+For skjold og fortryd giver `409` også: vanen er allerede beskyttet eller ikke beskyttet i dag, der er ingen streak at beskytte, brugeren har ikke point nok, eller brugeren ikke har point nok til at fortryde en gennemførsel (pointene er brugt).
+
+**Skjold (streak-beskyttelse):** et skjold gælder kun for i dag og kun på en dag, vanen er planlagt til. Det tæller ikke med i streaken, men bryder den heller ikke. Man kan ikke beskytte en vane uden streak eller en dag, der allerede er gennemført eller beskyttet. Gennemfører man dagen alligevel, refunderes skjoldet. Point kan ikke komme under 0.
 
 `weekdays` er et tal fra 0 til 6 som i `Date.getDay()`: 0 er søndag og 6 er lørdag.
 

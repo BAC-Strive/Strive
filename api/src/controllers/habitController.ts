@@ -1,5 +1,6 @@
 import { Router } from "express";
 import * as habitService from "../services/habitService";
+import * as rewardService from "../services/rewardService";
 import { createHabitSchema } from "../validation/habit";
 import { parseOrThrow } from "../validation/auth";
 import { requireAuth } from "../middleware/requireAuth";
@@ -44,5 +45,20 @@ habitRouter.post("/:id/complete", async (req, res) => {
 habitRouter.delete("/:id/complete", async (req, res) => {
   // Kaster HabitNotFoundError (404) eller HabitNotCompletedError (409). Ugyldigt id giver 400 (CastError).
   const result = await habitService.undoCompleteHabit(req.userId!, req.params.id);
+  res.status(200).json(result);
+});
+
+// POST /habits/:id/protect: køber et skjold til i dag med point, så streaken ikke brydes
+habitRouter.post("/:id/protect", async (req, res) => {
+  // Kaster HabitNotFoundError (404), HabitNotScheduledError (400) eller en 409, hvis dagen allerede er
+  // gennemført eller beskyttet, der ingen streak er, eller der ikke er point nok. Ugyldigt id giver 400.
+  const result = await rewardService.protectStreak(req.userId!, req.params.id);
+  res.status(201).json(result);
+});
+
+// DELETE /habits/:id/protect: fortryder dagens skjold og giver pointene tilbage
+habitRouter.delete("/:id/protect", async (req, res) => {
+  // Kaster HabitNotFoundError (404) eller HabitNotProtectedError (409). Ugyldigt id giver 400.
+  const result = await rewardService.unprotectStreak(req.userId!, req.params.id);
   res.status(200).json(result);
 });

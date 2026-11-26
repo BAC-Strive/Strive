@@ -27,3 +27,31 @@ export class HabitNotScheduledError extends AppError {
         super(400, "Vanen skal ikke gennemføres i dag");
     }
 }
+
+// Dagen er allerede beskyttet med et skjold
+export class HabitAlreadyProtectedError extends AppError {
+    constructor() {
+        super(409, "Vanen er allerede beskyttet i dag");
+    }
+}
+
+// Der er ingen streak at beskytte (vanen er ny, eller streaken er brudt)
+export class NoStreakToProtectError extends AppError {
+    constructor() {
+        super(409, "Der er ingen streak at beskytte");
+    }
+}
+
+// Der er intet skjold for i dag at fortryde
+export class HabitNotProtectedError extends AppError {
+    constructor() {
+        super(409, "Vanen er ikke beskyttet i dag");
+    }
+}
+
+// To kald kom samtidigt, og dagen er blevet gennemført eller beskyttet, siden vi tjekkede
+export class HabitDayTakenError extends AppError {
+    constructor() {
+        super(409, "Vanen er allerede gennemført eller beskyttet i dag");
+    }
+}
